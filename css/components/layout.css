@@ -1,0 +1,52 @@
+/* CONTAINER */
+.container { max-width: 1400px; margin: 0 auto; position: relative; }
+
+/* HEADER */
+.header { margin-bottom: var(--spacing-xl); padding: var(--spacing-xl); background: var(--bg-primary); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); position: relative; z-index: 5; }
+.header-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--spacing-lg); }
+.header-left h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); margin-bottom: var(--spacing-sm); background: linear-gradient(90deg, #00dbde, #fc00ff); -webkit-background-clip: text; -moz-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; display: inline-block; font-weight: 700; }
+.header-left p { font-size: clamp(0.9rem, 2vw, 1.2rem); opacity: 0.8; color: var(--text-secondary); }
+
+/* LANGUAGE SELECTOR */
+.language-selector { display: flex; align-items: center; gap: var(--spacing-md); background: rgba(255, 255, 255, 0.1); padding: var(--spacing-md) var(--spacing-lg); border-radius: 25px; backdrop-filter: blur(10px); border: 1px solid var(--border-color); z-index: 10; }
+.language-selector label { color: var(--text-primary); font-weight: 500; font-size: var(--font-sm); margin: 0; }
+.language-dropdown { background: rgba(30, 30, 46, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: var(--radius-sm); color: white; padding: var(--spacing-sm) var(--spacing-md); font-size: var(--font-sm); min-width: 140px; cursor: pointer; transition: var(--transition-fast); }
+.language-dropdown:hover { border-color: var(--accent-green); background: rgba(30, 30, 46, 0.95); }
+.language-dropdown:focus { outline: none; border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(139, 233, 253, 0.3); }
+
+/* TABS NAVIGATION */
+.tabs { display: flex; background: rgba(255, 255, 255, 0.05); border-radius: var(--radius-lg); padding: var(--spacing-sm); margin-bottom: var(--spacing-xl); overflow-x: auto; box-shadow: var(--shadow-sm); gap: var(--spacing-sm); scrollbar-width: thin; scrollbar-color: var(--accent-purple) transparent; }
+.tabs::-webkit-scrollbar { height: 6px; }
+.tabs::-webkit-scrollbar-thumb { background: var(--accent-purple); border-radius: 3px; }
+.tab { flex: 1; padding: var(--spacing-md) var(--spacing-lg); border: none; background: transparent; color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-md); transition: var(--transition-fast); font-weight: 600; font-size: var(--font-base); display: flex; align-items: center; justify-content: center; gap: var(--spacing-sm); white-space: nowrap; min-width: fit-content; position: relative; overflow: hidden; }
+.tab::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary-gradient); opacity: 0; transition: opacity var(--transition-fast); z-index: -1; }
+.tab:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); transform: translateY(-1px); }
+.tab.active { background: var(--primary-gradient); color: white; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transform: translateY(-2px); }
+.tab.active::before { opacity: 1; }
+
+/* SECTIONS */
+.content { display: none; animation: fadeIn var(--transition-normal); }
+.content.active { display: block; }
+
+/* LAYOUT RESPONSIVE */
+@media (max-width: 1024px) {
+    .container { max-width: 95%; }
+}
+@media (max-width: 768px) {
+    body { padding: 10px; }
+    .header-content { flex-direction: column; text-align: center; gap: var(--spacing-md); }
+    .header-left { text-align: center; }
+    .header-left h1 { font-size: 2rem; }
+    .header-left p { font-size: 1rem; }
+    .language-selector { order: -1; justify-content: center; margin-bottom: var(--spacing-sm); }
+    .tabs { flex-direction: column; gap: var(--spacing-sm); }
+    .tab { width: 100%; justify-content: center; }
+}
+@media (max-width: 480px) {
+    .header h1 { font-size: 1.5rem; }
+    .header p { font-size: 0.9rem; }
+    .language-dropdown { min-width: 120px; font-size: var(--font-xs); }
+}
+/* RTL SUPPORT */
+[dir="rtl"] .header-content { flex-direction: row-reverse; }
+[dir="rtl"] .tabs { flex-direction: row-reverse; }

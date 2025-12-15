@@ -1,0 +1,24 @@
+/* ===============================================
+   DEEPFORGE STUDIO - MAIN STYLESHEET
+   =============================================== */
+
+/* 1. Base & Utilities (Variables, Resets, Colors) */
+@import 'components/utilities.css';
+
+/* 2. Core Layout (Header, Tabs, Containers) */
+@import 'components/layout.css';
+
+/* 3. Global UI Elements */
+@import 'components/forms.css'; /* Inputs & Buttons */
+@import 'components/cards.css';
+@import 'components/modals.css';
+@import 'components/notifications.css';
+
+/* 4. Domain Specific Components */
+@import 'components/layers.css';
+@import 'components/ai-optimizer.css';
+@import 'components/model-visualization.css';
+@import 'components/results.css';
+
+/* 5. Animations */
+@import 'components/animations.css';

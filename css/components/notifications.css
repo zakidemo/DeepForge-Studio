@@ -1,0 +1,7 @@
+.notification { position: fixed; top: var(--spacing-lg); right: var(--spacing-lg); padding: var(--spacing-md) var(--spacing-xl); border-radius: var(--radius-lg); background: var(--success-gradient); color: white; animation: slideInRight var(--transition-fast), fadeOut var(--transition-fast) 2.5s forwards; z-index: 1002; box-shadow: var(--shadow-md); font-weight: 600; max-width: 400px; display: flex; align-items: center; gap: var(--spacing-sm); }
+.notification.error { background: var(--danger-gradient); }
+.notification.warning { background: var(--warning-gradient); }
+.notification.info { background: var(--info-gradient); }
+@media (max-width: 480px) {
+    .notification { right: 10px; top: 10px; max-width: calc(100vw - 20px); }
+}

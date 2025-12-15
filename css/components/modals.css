@@ -1,0 +1,31 @@
+.modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(5px); animation: fadeIn var(--transition-fast); }
+.modal.active { display: flex; }
+.modal-content { background: var(--bg-modal); padding: var(--spacing-xxl); border-radius: var(--radius-xl); max-width: 650px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); border: 1px solid var(--border-color); position: relative; animation: slideInUp var(--transition-fast); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-xl); padding-bottom: var(--spacing-lg); border-bottom: 1px solid var(--border-color); }
+.modal-header h2 { margin: 0; color: var(--accent-blue); font-size: var(--font-2xl); }
+.modal-body { max-height: 60vh; overflow-y: auto; padding-right: var(--spacing-sm); }
+.modal-body::-webkit-scrollbar { width: 8px; }
+.modal-body::-webkit-scrollbar-track { background: rgba(30, 30, 46, 0.5); border-radius: 4px; }
+.modal-body::-webkit-scrollbar-thumb { background: var(--primary-gradient); border-radius: 4px; }
+.close-modal { position: absolute; top: var(--spacing-lg); right: var(--spacing-lg); color: white; font-size: 1.8rem; font-weight: bold; cursor: pointer; transition: var(--transition-fast); background: none; border: none; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
+.close-modal:hover { color: var(--accent-red); transform: rotate(90deg); }
+
+/* ML CONFIG MODAL SPECIFIC */
+#mlConfigModal .modal-content { max-width: 700px; }
+.param-section { background: rgba(68, 71, 90, 0.3); border-radius: var(--radius-lg); padding: var(--spacing-lg); margin-bottom: var(--spacing-lg); border: 1px solid var(--border-color); }
+.param-section h4 { color: var(--accent-green); margin-bottom: var(--spacing-md); display: flex; align-items: center; gap: var(--spacing-sm); }
+.param-group { margin-bottom: var(--spacing-md); }
+.param-group label { display: block; margin-bottom: var(--spacing-xs); color: var(--accent-blue); font-size: var(--font-sm); }
+.param-group small { color: var(--text-muted); font-size: var(--font-xs); display: block; margin-top: var(--spacing-xs); }
+.param-toggle { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacing-sm); }
+.param-group.disabled { opacity: 0.4; pointer-events: none; }
+
+@media (max-width: 768px) {
+    .modal-content { padding: var(--spacing-lg); width: 95%; }
+}
+[dir="rtl"] .modal-header { flex-direction: row-reverse; }
+
+/* MODEL MODE MODAL */
+.model-mode-modal { max-width: 560px; }
+.model-mode-choices { grid-template-columns: 1fr 1fr; gap: var(--spacing-lg); }
+.modal-actions { display: flex; justify-content: flex-end; margin-top: var(--spacing-lg); }

@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="DeepForge Studio - Advanced AI Model Builder with Full Configuration Export for Google Colab">
+    <meta name="author" content="DeepForge Team">
+    <title>DeepForge Studio - Advanced AI Model Builder</title>
+    
+    <!-- External Dependencies -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/intro.js@7.2.0/intro.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intro.js@7.2.0/minified/introjs.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-python.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-dark.min.css">
+    
+    <!-- LINK TO YOUR NEW CSS FILE -->
+    <link rel="stylesheet" href="css/style.css">
+
+
+    <!-- LINK TO YOUR SCRIPT FILE -->
+   <script type="module" src="js/main.js"></script>
+
+</head>
+<body>
+ 
+   <div class="container">
+       <!-- Header -->
+       <header class="header" role="banner">
+           <div class="header-content">
+               <div class="header-left">
+                   <h1 id="app-title">
+                       <i class="fas fa-brain" aria-hidden="true"></i>
+                       <span data-translate="app-title">DeepForge Studio</span>
+                   </h1>
+                   <p id="app-description" data-translate="app-description">
+                       Advanced AI Model Builder - Full Configuration Export for Colab
+                   </p>
+               </div>
+               
+               <div class="language-selector" role="navigation" aria-label="Language selection">
+                   <label for="languageSelect" id="language-label" data-translate="language-label">Language:</label>
+                   <select id="languageSelect" class="language-dropdown" aria-label="Choose language">
+                       <option value="en">🇺🇸 English</option>
+                       <option value="ar">🇸🇦 العربية</option>
+                   </select>
+               </div>
+           </div>
+       </header>
+
+       <!-- Main Content -->
+       <main id="main-content">
+           <!-- Tab Navigation -->
+           <nav class="tabs" role="tablist" aria-label="Main navigation">
+               <button class="tab active" role="tab" aria-selected="true" aria-controls="architecture" 
+                       id="architecture-tab" data-tab="architecture" data-translate="tab-architecture">
+                   <i class="fas fa-layer-group" aria-hidden="true"></i>
+                   <span>Architecture</span>
+               </button>
+               <button class="tab" role="tab" aria-selected="false" aria-controls="hyperparams" 
+                       id="hyperparams-tab" data-tab="hyperparams" data-translate="tab-hyperparams">
+                   <i class="fas fa-sliders-h" aria-hidden="true"></i>
+                   <span>Hyperparameters</span>
+               </button>
+               <button class="tab" role="tab" aria-selected="false" aria-controls="ai-optimizer" 
+                       id="ai-optimizer-tab" data-tab="ai-optimizer" data-translate="tab-ai-optimizer">
+                   <i class="fas fa-brain" aria-hidden="true"></i>
+                   <span>AI Optimizer</span>
+               </button>
+               <button class="tab" role="tab" aria-selected="false" aria-controls="export" 
+                       id="export-tab" data-tab="export" data-translate="tab-export">
+                   <i class="fas fa-file-export" aria-hidden="true"></i>
+                   <span>Export</span>
+               </button>
+           </nav>
+
+           <!-- Architecture Section -->
+           <section id="architecture" class="content active" role="tabpanel" aria-labelledby="architecture-tab">
+               <div class="card">
+                   <h2><i class="fas fa-project-diagram" aria-hidden="true"></i> 
+                       <span data-translate="select-model-arch">Select Model Architecture</span>
+                   </h2>
+                   
+                   <div class="features">
+                       <div class="feature-card active" data-mode="prebuilt" role="button" tabindex="0">
+                           <i class="fas fa-bolt" aria-hidden="true"></i>
+                           <h3 data-translate="prebuilt-models">Pre-built Models</h3>
+                           <p data-translate="prebuilt-desc">Choose from state-of-the-art architectures</p>
+                       </div>
+                       <div class="feature-card" data-mode="custom" role="button" tabindex="0">
+                           <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
+                           <h3 data-translate="custom-builder">Custom Builder</h3>
+                           <p data-translate="custom-desc">Design your own model layer by layer</p>
+                       </div>
+
+                   </div>
+
+                   <!-- Pre-built Models Section -->
+                   <div id="prebuiltSection">
+                       <h3><i class="fas fa-star" aria-hidden="true"></i> 
+                           <span data-translate="prebuilt-architectures">Pre-built Architectures</span>
+                       </h3>
+                       
+                       <div class="model-filters mb-3">
+                           <button class="btn btn-primary" data-filter="all">All Models</button>
+                           <button class="btn" data-filter="dl">Deep Learning</button>
+                           <button class="btn" data-filter="ml">Machine Learning</button>
+                       </div>
+                       
+                       <div class="grid" id="modelGrid" role="list"></div>
+                       <!-- ADD THIS AFTER YOUR MODEL GRID -->
+                        
+
+<!-- Mode hint (quick access without scrolling) -->
+<div id="modeHint" class="mode-hint" style="display:none;">
+    <div class="mode-hint__left">
+        <i class="fas fa-sliders-h" aria-hidden="true"></i>
+        <span id="modeHintText">Mode: -</span>
+    </div>
+    <button class="btn btn-secondary btn-sm" id="changeModelModeBtn" type="button">
+        <i class="fas fa-exchange-alt" aria-hidden="true"></i>
+        <span data-translate="change-mode">Change</span>
+    </button>
+</div>
+
+                        <div id="model-visual-container"></div>
+                   </div>
+
+                   <!-- Pretrained Options -->
+                   <div class="card" id="pretrainedOptions" style="display:none;">
+                       <h3><i class="fas fa-cog" aria-hidden="true"></i> 
+                           <span data-translate="model-config">Model Configuration</span>
+                       </h3>
+                       
+                       
+<div class="mode-row">
+                           <span id="currentModelModeLabel">Mode: -</span>
+                           <button class="btn btn-secondary btn-sm" id="openModelModeModalFromCard" type="button">
+                               <i class="fas fa-exchange-alt" aria-hidden="true"></i>
+                               <span data-translate="change-mode">Change</span>
+                           </button>
+                       </div>
+
+                       <div id="pretrainedSettings" class="mt-3">
+                           <label for="freezeLayers">
+                               <i class="fas fa-lock" aria-hidden="true"></i> Freeze Layers
+                           </label>
+                           <select class="input" id="freezeLayers">
+                               <option value="none">None - Train all layers</option>
+                               <option value="base">Freeze base model</option>
+                               <option value="partial">Freeze first 50% layers</option>
+                               <option value="all_but_last">Freeze all except last layer</option>
+                           </select>
+                           
+                           <label for="inputSize">
+                               <i class="fas fa-images" aria-hidden="true"></i> Input Size
+                           </label>
+                           <select class="input" id="inputSize">
+                               <option value="224">224x224 (Standard)</option>
+                               <option value="299">299x299 (Inception)</option>
+                               <option value="331">331x331 (EfficientNet)</option>
+                               <option value="custom">Custom Size</option>
+                           </select>
+                           
+                           <label for="customTop">
+                               <i class="fas fa-layer-group" aria-hidden="true"></i> Add Custom Top
+                           </label>
+                           <select class="input" id="customTop">
+                               <option value="default">Default classifier</option>
+                               <option value="custom_dense">Custom Dense layers</option>
+                               <option value="global_average">Global Average Pooling only</option>
+                           </select>
+                       </div>
+                   </div>
+
+                   <!-- Custom Builder Section -->
+                   <div id="customBuilderSection" style="display:none;">
+                       <h3><i class="fas fa-tools" aria-hidden="true"></i> 
+                           <span data-translate="custom-model-builder">Custom Model Builder</span>
+                       </h3>
+                       <div id="layerButtons" role="toolbar" aria-label="Layer selection"></div>
+                       <div id="layers" class="layer-container">
+                           <p class="text-center opacity-75">Drag and drop layers here or use the buttons above</p>
+                       </div>
+                   </div>
+
+                   <label for="numClasses">
+                       <i class="fas fa-list-ol" aria-hidden="true"></i> 
+                       <span data-translate="num-classes">Number of Classes</span>
+                   </label>
+                   <input type="number" class="input" id="numClasses" value="10" min="2" max="1000">
+               </div>
+           </section>
+           
+           <!-- Hyperparameters Section -->
+            <section id="hyperparams" class="content" role="tabpanel" aria-labelledby="hyperparams-tab">
+                <div class="card" style="background: linear-gradient(135deg, rgba(30, 30, 46, 0.9), rgba(40, 42, 54, 0.9));">
+                    <h2 style="background: linear-gradient(90deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; font-size: 2.5rem; margin-bottom: 40px;">
+                        <i class="fas fa-sliders-h" aria-hidden="true"></i> 
+                        <span data-translate="hyperparameter-config">Hyperparameter Configuration</span>
+                    </h2>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 30px;">
+                        
+                        <!-- Training Configuration Card -->
+                        <div style="background: rgba(102, 126, 234, 0.1); border: 2px solid #667eea; border-radius: 20px; padding: 30px; transition: all 0.3s;">
+                            <h4 style="color: #bd93f9; font-size: 1.5rem; margin-bottom: 25px; display: flex; align-items: center; gap: 12px;">
+                                <i class="fas fa-robot" aria-hidden="true"></i> 
+                                <span data-translate="training-config">Training Configuration</span>
+                            </h4>
+                            
+                            <div class="param-group" style="margin-bottom: 25px;">
+                                <label data-translate="optimizer" style="color: #8be9fd; font-size: 1rem; font-weight: 600; margin-bottom: 10px; display: block;">Optimizer (Required)</label>
+                                <select class="input" id="optimizer" style="background: rgba(30, 30, 46, 0.8); border: 2px solid rgba(139, 233, 253, 0.3); padding: 15px; border-radius: 12px; font-size: 1.1rem;">
+                                    <option value="adam">Adam</option>
+                                    <option value="sgd">SGD</option>
+                                    <option value="rmsprop">RMSprop</option>
+                                    <option value="adagrad">Adagrad</option>
+                                    <option value="adadelta">Adadelta</option>
+                                </select>
+                            </div>
+                            
+                            <div class="param-group" style="margin-bottom: 25px;">
+                                <label data-translate="learning-rate" style="color: #8be9fd; font-size: 1rem; font-weight: 600; margin-bottom: 10px; display: block;">Learning Rate (Required)</label>
+                                <input type="number" class="input" id="lr" value="0.001" step="0.0001" style="background: rgba(30, 30, 46, 0.8); border: 2px solid rgba(139, 233, 253, 0.3); padding: 15px; border-radius: 12px; font-size: 1.1rem;">
+                            </div>
+                            
+                            <div class="param-group" style="margin-bottom: 25px;">
+                                <label data-translate="loss-function" style="color: #8be9fd; font-size: 1rem; font-weight: 600; margin-bottom: 10px; display: block;">Loss Function (Required)</label>
+                                <select class="input" id="lossFunction" style="background: rgba(30, 30, 46, 0.8); border: 2px solid rgba(139, 233, 253, 0.3); padding: 15px; border-radius: 12px; font-size: 1.1rem;">
+                                    <option value="categorical_crossentropy">Categorical Crossentropy</option>
+                                    <option value="binary_crossentropy">Binary Crossentropy</option>
+                                    <option value="mse">Mean Squared Error</option>
+                                    <option value="sparse_categorical_crossentropy">Sparse Categorical Crossentropy</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Training Schedule Card -->
+                        <div style="background: rgba(80, 250, 123, 0.1); border: 2px solid #50fa7b; border-radius: 20px; padding: 30px; transition: all 0.3s;">
+                            <h4 style="color: #50fa7b; font-size: 1.5rem; margin-bottom: 25px; display: flex; align-items: center; gap: 12px;">
+                                <i class="fas fa-redo" aria-hidden="true"></i> 
+                                <span data-translate="training-schedule">Training Schedule</span>
+                            </h4>
+                            
+                            <div class="param-group" style="margin-bottom: 25px;">
+                                <label data-translate="batch-size" style="color: #ffb86c; font-size: 1rem; font-weight: 600; margin-bottom: 10px; display: block;">Batch Size (Required)</label>
+                                <select class="input" id="batchSize" style="background: rgba(30, 30, 46, 0.8); border: 2px solid rgba(255, 184, 108, 0.3); padding: 15px; border-radius: 12px; font-size: 1.1rem;">
+                                    <option value="16">16</option>
+                                    <option value="32" selected>32</option>
+                                    <option value="64">64</option>
+                                    <option value="128">128</option>
+                                    <option value="256">256</option>
+                                </select>
+                            </div>
+                            
+                            <div class="param-group" style="margin-bottom: 25px;">
+                                <label data-translate="epochs" style="color: #ffb86c; font-size: 1rem; font-weight: 600; margin-bottom: 10px; display: block;">Epochs (Required)</label>
+                                <input type="number" class="input" id="epochs" value="50" min="1" style="background: rgba(30, 30, 46, 0.8); border: 2px solid rgba(255, 184, 108, 0.3); padding: 15px; border-radius: 12px; font-size: 1.1rem;">
+                            </div>
+                            
+                            <div class="param-toggle" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <label style="color: #ffb86c; font-size: 1rem; font-weight: 600;">Learning Rate Schedule</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="toggle_lrSchedule" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="param-group" id="group_lrSchedule">
+                                <select class="input" id="lrSchedule" style="background: rgba(30, 30, 46, 0.8); border: 2px solid rgba(255, 184, 108, 0.3); padding: 15px; border-radius: 12px; font-size: 1.1rem;">
+                                    <option value="constant">Constant</option>
+                                    <option value="exponential">Exponential Decay</option>
+                                    <option value="step">Step Decay</option>
+                                    <option value="cosine">Cosine Decay</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Optimizer Section (Continuation) -->
+           <section id="ai-optimizer" class="content" role="tabpanel" aria-labelledby="ai-optimizer-tab">
+               <!-- Wizard Header -->
+               <div class="optimizer-wizard-header">
+                   <div class="wizard-steps">
+                       <div class="wizard-step active" id="step-1">
+                           <span class="step-number">1</span>
+                           <span class="step-label">Setup API</span>
+                       </div>
+                       <div class="wizard-step" id="step-2">
+                           <span class="step-number">2</span>
+                           <span class="step-label">Choose Analysis</span>
+                       </div>
+                       <div class="wizard-step" id="step-3">
+                           <span class="step-number">3</span>
+                           <span class="step-label">Get Results</span>
+                       </div>
+                   </div>
+               </div>
+
+               <!-- Step 1: API Setup -->
+               <div class="card optimizer-step" id="api-setup-step">
+                   <div class="setup-header">
+                       <h2><i class="fas fa-key" aria-hidden="true"></i> Quick Setup - Google Gemini AI (FREE)</h2>
+                       <span class="setup-badge">One-time setup</span>
+                   </div>
+                   
+                   <div class="setup-container">
+                       <div class="setup-guide">
+                           <div class="guide-step">
+                               <div class="guide-number">1</div>
+                               <div class="guide-content">
+                                   <h4>Get Your Free API Key</h4>
+                                   <p>Click the button to get your key from Google AI Studio</p>
+                                   <a href="https://makersuite.google.com/app/apikey" target="_blank" 
+                                      rel="noopener noreferrer" class="btn btn-primary">
+                                       <i class="fas fa-external-link-alt" aria-hidden="true"></i> Get Free API Key
+                                   </a>
+                               </div>
+                           </div>
+                           
+                           <div class="guide-step">
+                               <div class="guide-number">2</div>
+                               <div class="guide-content">
+                                   <h4>Paste Your API Key</h4>
+                                   <p>Copy the key and paste it here</p>
+                                   <div class="api-input-group">
+                                       <input type="password" class="input" id="geminiApiKey" 
+                                              placeholder="Paste your API key here...">
+                                       <button class="btn-icon" id="toggleApiKeyBtn" title="Show/Hide API key">
+                                           <i class="fas fa-eye" id="api-visibility-icon" aria-hidden="true"></i>
+                                       </button>
+                                       <button class="btn-icon" id="clearApiKeyBtn" title="Clear saved API key">
+                                           <i class="fas fa-trash" aria-hidden="true"></i>
+                                       </button>
+                                   </div>
+                               </div>
+                           </div>
+                           
+                           <div class="guide-step">
+                               <div class="guide-number">3</div>
+                               <div class="guide-content">
+                                   <h4>Activate AI Features</h4>
+                                   <p>Test your connection to enable all features</p>
+                                   <button class="btn btn-success" id="activate-btn">
+                                       <i class="fas fa-power-off" aria-hidden="true"></i> Activate AI Optimizer
+                                   </button>
+                               </div>
+                           </div>
+                       </div>
+                       
+                       <div class="connection-status" id="connection-status">
+                           <div class="status-indicator" id="status-indicator">
+                               <i class="fas fa-circle" aria-hidden="true"></i>
+                               <span id="status-text">Not Connected</span>
+                           </div>
+                       </div>
+                   </div>
+               </div>
+
+               <!-- Step 2: Analysis Options -->
+               <div class="card optimizer-step" id="analysis-options-step" style="display: none;">
+                   <h2><i class="fas fa-brain" aria-hidden="true"></i> What would you like help with?</h2>
+                   
+                   <div class="quick-actions">
+                       <button class="quick-action-btn" data-action="improve">
+                           <i class="fas fa-magic" aria-hidden="true"></i>
+                           <span>Quick Improve</span>
+                       </button>
+                       <button class="quick-action-btn" data-action="fix">
+                           <i class="fas fa-wrench" aria-hidden="true"></i>
+                           <span>Fix Issues</span>
+                       </button>
+                       <button class="quick-action-btn" data-action="optimize">
+                           <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
+                           <span>Max Performance</span>
+                       </button>
+                       <button class="quick-action-btn" data-action="explain">
+                           <i class="fas fa-question-circle" aria-hidden="true"></i>
+                           <span>Explain Model</span>
+                       </button>
+                   </div>
+
+                   <div class="analysis-grid">
+                       <!-- Analysis Cards -->
+                       <div class="analysis-card" data-analysis="recommendations">
+                           <div class="analysis-icon">
+                               <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                           </div>
+                           <div class="analysis-content">
+                               <h3>Smart Recommendations</h3>
+                               <p>Get personalized suggestions to improve your model</p>
+                               <ul class="analysis-features">
+                                   <li><i class="fas fa-check" aria-hidden="true"></i> Architecture improvements</li>
+                                   <li><i class="fas fa-check" aria-hidden="true"></i> Performance tips</li>
+                                   <li><i class="fas fa-check" aria-hidden="true"></i> Common pitfall warnings</li>
+                               </ul>
+                           </div>
+                           <div class="analysis-action">
+                               <span class="time-estimate"><i class="fas fa-clock" aria-hidden="true"></i> ~30 sec</span>
+                               <button class="btn btn-primary">Analyze <i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+                           </div>
+                       </div>
+
+                       <!-- More analysis cards... -->
+                   </div>
+
+                   <!-- Interactive Chat -->
+                   <div class="ai-chat-section">
+                       <h3><i class="fas fa-comments" aria-hidden="true"></i> Ask AI Assistant</h3>
+                       <div class="chat-input-group">
+                           <input type="text" class="chat-input" id="ai-question" 
+                                  placeholder="Ask anything about your model... (e.g., 'Why is my model overfitting?')">
+                           <button class="btn btn-primary" id="askAIBtn">
+                               <i class="fas fa-paper-plane" aria-hidden="true"></i> Ask
+                           </button>
+                       </div>
+                       
+                       <div class="suggested-questions">
+                           <span class="suggestion-label">Try asking:</span>
+                           <button class="suggestion-chip" data-question="How can I reduce overfitting?">
+                               How can I reduce overfitting?
+                           </button>
+                           <button class="suggestion-chip" data-question="What's the best optimizer for my model?">
+                               What's the best optimizer for my model?
+                           </button>
+                           <button class="suggestion-chip" data-question="Should I use dropout or batch normalization?">
+                               Should I use dropout or batch normalization?
+                           </button>
+                           <button class="suggestion-chip" data-question="How many epochs should I train for?">
+                               How many epochs should I train for?
+                           </button>
+                       </div>
+                   </div>
+
+                   <!-- Smart Recommendation Form -->
+                   <div class="card mt-3">
+                       <h3><i class="fas fa-brain" aria-hidden="true"></i> 
+                           <span data-translate="smart-model-rec">Smart Model Recommendation</span>
+                       </h3>
+                       <div class="form-description" data-translate="form-description">
+                           Tell us about your data and problem - our AI will recommend the best model architecture 
+                           and approach based on current literature and best practices.
+                       </div>
+                       
+                       <div class="recommendation-form">
+                           <!-- Problem Definition Section -->
+                           <div class="form-section">
+                               <h4><i class="fas fa-bullseye" aria-hidden="true"></i> 
+                                   <span data-translate="problem-definition">Problem Definition</span>
+                               </h4>
+                               <div class="form-group">
+                                   <label data-translate="problem-type">What type of problem are you solving?</label>
+                                   <select class="input" id="problemType">
+                                       <option value="">Select your problem type...</option>
+                                       <option value="classification">Classification (Predict categories/classes)</option>
+                                       <option value="regression">Regression (Predict continuous values)</option>
+                                       <option value="clustering">Clustering (Group similar data points)</option>
+                                       <option value="anomaly-detection">Anomaly Detection (Find outliers)</option>
+                                       <option value="time-series">Time Series Forecasting</option>
+                                       <option value="nlp">Natural Language Processing</option>
+                                       <option value="computer-vision">Computer Vision</option>
+                                       <option value="recommendation-sys">Recommendation System</option>
+                                   </select>
+                               </div>
+                               
+                               <div class="form-group">
+                                   <label data-translate="describe-problem">Describe your specific problem</label>
+                                   <textarea class="input" id="problemDescription" rows="3" 
+                                             placeholder="e.g., 'I want to predict house prices based on location, size, and amenities'"></textarea>
+                               </div>
+                               
+                               <div class="form-group" id="targetVariableGroup" style="display: none;">
+                                   <label>Target Variable</label>
+                                   <input type="text" class="input" id="targetVariable" 
+                                          placeholder="What are you trying to predict?">
+                               </div>
+                           </div>
+
+                           <!-- Dataset Information Section -->
+                           <div class="form-section">
+                               <h4><i class="fas fa-database" aria-hidden="true"></i> 
+                                   <span data-translate="dataset-info">Dataset Information</span>
+                               </h4>
+                               <div class="form-row">
+                                   <div class="form-group">
+                                       <label data-translate="dataset-size">Dataset Size (Number of Samples)</label>
+                                       <select class="input" id="datasetSize">
+                                           <option value="small-data">Small (< 1,000 samples)</option>
+                                           <option value="medium-data">Medium (1,000 - 100,000 samples)</option>
+                                           <option value="large-data">Large (100,000 - 1M samples)</option>
+                                           <option value="very-large-data">Very Large (> 1M samples)</option>
+                                       </select>
+                                   </div>
+                                   
+                                   <div class="form-group">
+                                       <label data-translate="num-features">Number of Features</label>
+                                       <input type="number" class="input" id="numFeatures" placeholder="e.g., 10" min="1">
+                                   </div>
+                               </div>
+                               
+                               <div class="form-group">
+                                   <label data-translate="data-types">Data Types in Your Dataset</label>
+                                   <div class="checkbox-group">
+                                       <div class="checkbox-item">
+                                           <input type="checkbox" id="hasNumerical" checked>
+                                           <label for="hasNumerical">Numerical</label>
+                                       </div>
+                                       <div class="checkbox-item">
+                                           <input type="checkbox" id="hasCategorical">
+                                           <label for="hasCategorical">Categorical</label>
+                                       </div>
+                                       <div class="checkbox-item">
+                                           <input type="checkbox" id="hasText">
+                                           <label for="hasText">Text</label>
+                                       </div>
+                                       <div class="checkbox-item">
+                                           <input type="checkbox" id="hasImages">
+                                           <label for="hasImages">Images</label>
+                                       </div>
+                                       <div class="checkbox-item">
+                                           <input type="checkbox" id="hasAudio">
+                                           <label for="hasAudio">Audio</label>
+                                       </div>
+                                       <div class="checkbox-item">
+                                           <input type="checkbox" id="hasDateTime">
+                                           <label for="hasDateTime">Date/Time</label>
+                                       </div>
+                                   </div>
+                               </div>
+                               
+                               <div class="quality-indicators">
+                                   <div class="quality-item">
+                                       <label>Missing Values</label>
+                                       <select class="input" id="missingValues">
+                                           <option value="none">None</option>
+                                           <option value="few">Few (< 5%)</option>
+                                           <option value="some">Some (5-20%)</option>
+                                           <option value="many">Many (> 20%)</option>
+                                       </select>
+                                   </div>
+                                   
+                                   <div class="quality-item">
+                                       <label>Outliers</label>
+                                       <select class="input" id="outliers">
+                                           <option value="none">None detected</option>
+                                           <option value="few">Few outliers</option>
+                                           <option value="many">Many outliers</option>
+                                           <option value="unknown">Unknown</option>
+                                       </select>
+                                   </div>
+                               </div>
+                           </div>
+
+                           <!-- Performance & Constraints Section -->
+                           <div class="form-section">
+                               <h4><i class="fas fa-target" aria-hidden="true"></i> 
+                                   <span data-translate="performance-constraints">Performance & Constraints</span>
+                               </h4>
+                               <div class="form-row">
+                                   <div class="form-group">
+                                       <label data-translate="primary-goal">Primary Goal</label>
+                                       <select class="input" id="primaryGoal">
+                                           <option value="highest-accuracy">Highest Accuracy</option>
+                                           <option value="fast-training">Fast Training/Inference</option>
+                                           <option value="model-interpretability">Model Interpretability</option>
+                                           <option value="low-memory">Low Memory Usage</option>
+                                           <option value="balanced-performance">Balanced Performance</option>
+                                       </select>
+                                   </div>
+                                   
+                                   <div class="form-group">
+                                       <label data-translate="compute-resources">Computational Resources</label>
+                                       <select class="input" id="computeResources">
+                                           <option value="limited">Limited (CPU only)</option>
+                                           <option value="moderate">Moderate (Basic GPU)</option>
+                                           <option value="high">High (Powerful GPU)</option>
+                                           <option value="cloud">Cloud/Unlimited</option>
+                                       </select>
+                                   </div>
+                               </div>
+                               
+                               <div class="form-group">
+                                   <label>Deployment Environment</label>
+                                   <select class="input" id="deploymentEnv">
+                                       <option value="research">Research/Experimentation</option>
+                                       <option value="production">Production System</option>
+                                       <option value="edge">Edge/Mobile Device</option>
+                                       <option value="cloud">Cloud Service</option>
+                                   </select>
+                               </div>
+                           </div>
+
+                           <!-- Form Actions -->
+                           <div class="form-actions">
+                               <button class="btn btn-secondary btn-large" id="resetFormBtn">
+                                   <i class="fas fa-undo" aria-hidden="true"></i> 
+                                   <span data-translate="reset-form">Reset Form</span>
+                               </button>
+                               <button class="btn btn-success btn-large" id="generateRecommendationBtn">
+                                   <i class="fas fa-brain" aria-hidden="true"></i> 
+                                   <span data-translate="get-recommendation">Get AI Model Recommendation</span>
+                               </button>
+                           </div>
+                       </div>
+                   </div>
+               </div>
+
+               <!-- Step 3: Results -->
+               <div class="card optimizer-step" id="results-step" style="display: none;">
+                   <div class="results-header">
+                       <div class="results-title">
+                           <h2 id="results-title"><i class="fas fa-chart-line" aria-hidden="true"></i> Analysis Results</h2>
+                           <span class="results-badge" id="results-badge">Completed</span>
+                       </div>
+                       <div class="results-actions">
+                           <button class="btn btn-secondary" id="downloadResultsBtn">
+                               <i class="fas fa-download" aria-hidden="true"></i> Download
+                           </button>
+                           <button class="btn btn-secondary" id="shareResultsBtn">
+                               <i class="fas fa-share" aria-hidden="true"></i> Share
+                           </button>
+                           <button class="btn btn-primary" id="newAnalysisBtn">
+                               <i class="fas fa-plus" aria-hidden="true"></i> New Analysis
+                           </button>
+                       </div>
+                   </div>
+
+                   <!-- Result Tabs -->
+                   <div class="results-tabs">
+                       <button class="result-tab active" data-result-tab="summary">
+                           <i class="fas fa-list" aria-hidden="true"></i> Summary
+                       </button>
+                       <button class="result-tab" data-result-tab="detailed">
+                           <i class="fas fa-file-alt" aria-hidden="true"></i> Detailed
+                       </button>
+                       <button class="result-tab" data-result-tab="code">
+                           <i class="fas fa-code" aria-hidden="true"></i> Code
+                       </button>
+                       <button class="result-tab" data-result-tab="visual">
+                           <i class="fas fa-chart-bar" aria-hidden="true"></i> Visual
+                       </button>
+                   </div>
+
+                   <!-- Results Content -->
+                   <div class="results-content">
+                       <div class="result-tab-content active" id="summary-tab">
+                           <div class="summary-grid">
+                               <div class="insight-card">
+                                   <h4><i class="fas fa-star" aria-hidden="true"></i> Key Insights</h4>
+                                   <div id="key-insights" class="insight-list"></div>
+                               </div>
+                               <div class="insight-card">
+                                   <h4><i class="fas fa-bolt" aria-hidden="true"></i> Quick Wins</h4>
+                                   <div id="quick-wins" class="insight-list"></div>
+                               </div>
+                               <div class="insight-card">
+                                   <h4><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Warnings</h4>
+                                   <div id="warnings" class="insight-list"></div>
+                               </div>
+                           </div>
+                           
+                           <div class="apply-section">
+                               <button class="btn btn-success btn-large" id="applyRecommendationsBtn">
+                                   <i class="fas fa-magic" aria-hidden="true"></i> Apply All Recommendations
+                               </button>
+                               <p class="apply-note">This will update your model configuration with AI suggestions</p>
+                           </div>
+                       </div>
+                       
+                       <div class="result-tab-content" id="detailed-tab">
+                           <div id="detailed-analysis" class="detailed-content"></div>
+                       </div>
+                       
+                       <div class="result-tab-content" id="code-tab">
+                           <div class="code-examples">
+                               <div id="recommended-code" class="code-block-enhanced"></div>
+                           </div>
+                       </div>
+                       
+                       <div class="result-tab-content" id="visual-tab">
+                           <div class="visual-analysis">
+                               <canvas id="analysis-chart"></canvas>
+                           </div>
+                       </div>
+                   </div>
+               </div>
+
+               <!-- AI Response Area -->
+               <div id="ai-response-area" class="card optimizer-step" style="display: none;">
+                   <div id="ai-response-content"></div>
+                   <div class="text-center mt-3">
+                       <button id="apply-btn" class="btn btn-success" style="display: none;">
+                           <i class="fas fa-magic" aria-hidden="true"></i> Apply Recommendations
+                       </button>
+                   </div>
+               </div>
+
+               <!-- Loading Overlay -->
+               <div class="ai-loading-overlay" id="ai-loading" style="display: none;">
+                   <div class="loading-content">
+                       <div class="loading-spinner">
+                           <i class="fas fa-brain fa-spin"></i>
+                       </div>
+                       <h3 id="loading-message">AI is analyzing your model...</h3>
+                       <div class="loading-progress">
+                           <div class="progress-bar" id="progress-bar"></div>
+                       </div>
+                       <p id="loading-tip">Tip: Good models balance complexity with performance</p>
+                   </div>
+               </div>
+           </section>
+
+           <!-- Export Section -->
+           <section id="export" class="content" role="tabpanel" aria-labelledby="export-tab">
+               <div class="card">
+                   <h2><i class="fas fa-file-export" aria-hidden="true"></i> 
+                       <span data-translate="export-options">Export Options</span>
+                   </h2>
+                   
+                   <div class="grid" style="grid-template-columns: repeat(2, 1fr); max-width: 600px; margin: 0 auto;">
+                       <div class="model-card" data-export="python">
+                           <h3><i class="fab fa-python" aria-hidden="true"></i> 
+                               <span data-translate="python-script">Python Script</span>
+                           </h3>
+                           <p data-translate="python-desc">Complete training pipeline</p>
+                           <small>Includes all configurations</small>
+                       </div>
+                       
+                       <div class="model-card" data-export="colab">
+                           <h3><i class="fab fa-google" aria-hidden="true"></i> 
+                               <span data-translate="colab-notebook">Colab Notebook</span>
+                           </h3>
+                           <p data-translate="colab-desc">Ready-to-run in Google Colab</p>
+                       </div>
+                                             
+                   </div>
+               </div>
+           
+               <div class="card" style="margin-top: 18px;">
+                   <h2><i class="fas fa-code" aria-hidden="true"></i>
+                       <span data-translate="generated-code">Generated Code</span>
+                   </h2>
+
+                   <div class="flex" style="gap:10px; flex-wrap: wrap; align-items:center; margin-bottom: 10px;">
+                       <button class="btn btn-secondary" id="copyCodeBtn">
+                           <i class="fas fa-copy" aria-hidden="true"></i> Copy
+                       </button>
+                       <button class="btn btn-primary" id="downloadPyBtn">
+                           <i class="fab fa-python" aria-hidden="true"></i> Download .py
+                       </button>
+                       <button class="btn btn-primary" id="downloadIpynbBtn">
+                           <i class="fab fa-google" aria-hidden="true"></i> Download .ipynb
+                       </button>
+                       <button class="btn btn-outline" id="exportConfigBtn">
+                           <i class="fas fa-file-export" aria-hidden="true"></i> Export Config (.json)
+                       </button>
+                       <button class="btn btn-outline" id="importConfigBtn">
+                           <i class="fas fa-file-import" aria-hidden="true"></i> Import Config
+                       </button>
+                       <input id="importConfigInput" type="file" accept="application/json" style="display:none" />
+                       <small class="opacity-75" style="margin-left:auto;">
+                           Tip: export/import configs for reproducibility
+                       </small>
+                   </div>
+
+                   <pre class="language-python" style="max-height: 420px; overflow:auto; border-radius: 12px;">
+<code id="modelCode" class="language-python"></code>
+                   </pre>
+               </div>
+</section>
+       </main>
+   </div>
+
+   <!-- Modals -->
+   <!-- Layer Configuration Modal -->
+   <div id="layerConfigModal" class="modal" role="dialog" aria-labelledby="layerConfigTitle" aria-hidden="true">
+       <div class="modal-content" style="max-width: 500px;">
+           <div class="modal-header">
+               <h2 id="layerConfigTitle"><i class="fas fa-cog" aria-hidden="true"></i> Configure Layer</h2>
+               <button class="close-modal" aria-label="Close modal">&times;</button>
+           </div>
+           <div id="layerConfigForm" class="modal-body">
+               <!-- Dynamic content will be inserted here -->
+           </div>
+       </div>
+   </div>
+
+   <!-- ML Configuration Modal -->
+   <div id="mlConfigModal" class="modal" role="dialog" aria-labelledby="mlConfigTitle" aria-hidden="true">
+       <div class="modal-content" style="max-width: 700px;">
+           <div class="modal-header">
+               <h2 id="mlConfigTitle"><i class="fas fa-cogs" aria-hidden="true"></i> ML Model Configuration</h2>
+               <button class="close-modal" aria-label="Close modal">&times;</button>
+           </div>
+           <div id="mlConfigForm" class="modal-body">
+               <!-- Dynamic content will be inserted here -->
+           </div>
+       </div>
+   </div>
+
+   <!-- Follow-up Modal -->
+   <div id="followUpModal" class="modal" role="dialog" aria-labelledby="followUpTitle" aria-hidden="true">
+       <div class="modal-content">
+           <div class="modal-header">
+               <h2 id="followUpTitle"><i class="fas fa-question-circle" aria-hidden="true"></i> Ask Follow-up Question</h2>
+               <button class="close-modal" aria-label="Close modal">&times;</button>
+           </div>
+           <div class="modal-body">
+               <textarea id="followUpQuestion" class="input" rows="4" 
+                         placeholder="Ask a follow-up question about the analysis..."></textarea>
+               <div class="d-flex" style="justify-content: space-between; margin-top: 20px;">
+                   <button class="btn btn-danger" id="cancelFollowUpBtn">
+                       <i class="fas fa-times" aria-hidden="true"></i> Cancel
+                   </button>
+                   <button class="btn btn-success" id="submitFollowUpBtn">
+                       <i class="fas fa-paper-plane" aria-hidden="true"></i> Ask Question
+                   </button>
+               </div>
+           </div>
+       </div>
+   </div>
+   
+   <!-- JavaScript Link -->
+
+
+<!-- Model Mode Selection Modal -->
+<div class="modal" id="modelModeModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-content model-mode-modal">
+        <button class="close-modal" id="closeModelModeModalBtn" aria-label="Close modal">&times;</button>
+        <div class="modal-header">
+            <h2><i class="fas fa-layer-group" aria-hidden="true"></i> <span data-translate="choose-mode">Choose Training Mode</span></h2>
+        </div>
+        <div class="modal-body">
+            <p id="modelModeModalText" class="muted-text">
+                This architecture supports both training from scratch and using pretrained weights.
+            </p>
+
+            <div class="features model-mode-choices">
+                <div class="feature-card" id="chooseScratchBtn" role="button" tabindex="0">
+                    <i class="fas fa-hammer" aria-hidden="true"></i>
+                    <h3 data-translate="from-scratch">From Scratch</h3>
+                    <p data-translate="from-scratch-desc">Train model with random initialization</p>
+                    <small>Full control, needs more data</small>
+                </div>
+                <div class="feature-card active" id="choosePretrainedBtn" role="button" tabindex="0">
+                    <i class="fas fa-download" aria-hidden="true"></i>
+                    <h3 data-translate="pretrained">Pretrained</h3>
+                    <p data-translate="pretrained-desc">Use ImageNet weights & fine-tune</p>
+                    <small>Better for small datasets</small>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelModelModeBtn" type="button">
+                    <i class="fas fa-times" aria-hidden="true"></i> <span data-translate="cancel">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

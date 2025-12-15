@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "exportedAt": "2025-12-15T15:39:35.179555Z",
+  "model": "knn",
+  "currentMode": "prebuilt",
+  "modelMode": "scratch",
+  "mlConfig": {
+    "n_neighbors": 5
+  },
+  "numClasses": "10"
+}
