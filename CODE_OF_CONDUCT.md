@@ -6,4 +6,4 @@ This project follows the Contributor Covenant Code of Conduct.
 We are committed to providing a welcoming and harassment-free experience for everyone.
 
 ## Enforcement
-For reports, contact: REPLACE_WITH_CONTACT_EMAIL
+For reports, contact: zaki.neli@yahoo.fr
