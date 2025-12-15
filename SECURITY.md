@@ -1,7 +1,7 @@
 # Security Policy
 
 ## Reporting a vulnerability
-Please report security issues privately by email: REPLACE_WITH_SECURITY_EMAIL
+Please report security issues privately by email: zaki.neli@yahoo.fr
 
 Do not open public issues for security-sensitive reports.
 
