@@ -3,8 +3,8 @@ title: "DeepForge Studio"
 message: "If you use this software, please cite it as below."
 type: software
 authors:
-  - family-names: "REPLACE_WITH_LAST_NAME"
-    given-names: "REPLACE_WITH_FIRST_NAME"
+  - family-names: "NEILI"
+    given-names: "ZAKARIA"
 repository-code: "https://github.com/zakidemo/DeepForge-Studio"
 url: "https://github.com/zakidemo/DeepForge-Studio"
 version: "1.0.0"
