@@ -93,7 +93,8 @@ export const codeGenerator = {
             code += this.getModelArchitecture(state.model);
         }
         
-        code += `    layers.Dense(${numClasses}, activation='softmax')\n])\n\n# Compile\nmodel.compile(\n    optimizer='${document.getElementById('optimizer')?.value || 'adam'}',\n    loss='categorical_crossentropy',\n    metrics=['accuracy']\n)\n\nmodel.summary()`;
+        code += `    layers.Dense(${numClasses}, activation='softmax')\n])\n\n# Summary\nmodel.summary()\n`;
+        code += `\n# NOTE: Compilation and training steps are included in the exported training pipeline.\n`;
         return code;
     },
 
@@ -264,6 +265,11 @@ export const codeGenerator = {
         const appClass = appMap[modelType];
         const inputSize = inputSizeMap[modelType] || 224;
 
+        // Special case: export fully expanded VGG16 blocks (layer-by-layer) for educational transparency
+        if (modelType === 'vgg16') {
+            return this.generateVGG16ScratchExpanded(numClasses, inputSize);
+        }
+
         let code = `import tensorflow as tf\nfrom tensorflow.keras import layers, models\n\n`;
         code += `# ${appClass} (from scratch: weights=None)\n`;
         code += `base_model = tf.keras.applications.${appClass}(\n`;
@@ -273,18 +279,68 @@ export const codeGenerator = {
         code += `)\n\n`;
 
         code += `inputs = layers.Input(shape=(${inputSize}, ${inputSize}, 3))\n`;
-        code += `x = base_model(inputs, training=True)\n`;
+        code += `x = base_model(inputs)\n`;
         code += `x = layers.GlobalAveragePooling2D()(x)\n`;
         code += `x = layers.Dropout(0.2)(x)\n`;
         code += `outputs = layers.Dense(${numClasses}, activation='softmax')(x)\n`;
         code += `model = models.Model(inputs, outputs)\n\n`;
 
-        code += `model.compile(\n`;
-        code += `    optimizer='adam',\n`;
-        code += `    loss='categorical_crossentropy',\n`;
-        code += `    metrics=['accuracy']\n`;
-        code += `)\n\n`;
-        code += `model.summary()\n`;
+        code += `# Summary\nmodel.summary()\n`;
+        code += `\n# NOTE: Compilation and training steps are included in the exported training pipeline.\n`;
+
+        return code;
+    },
+
+    generateVGG16ScratchExpanded(numClasses, inputSize = 224) {
+        // Fully expanded VGG16 backbone (conv/pool blocks) for transparent exports.
+        // Head is kept lightweight by default (GAP + Dropout + Dense) to suit many tasks.
+        let code = `import tensorflow as tf\nfrom tensorflow.keras import layers, models\n\n`;
+        code += `# VGG16 (from scratch, expanded layer-by-layer)\n`;
+        code += `inputs = layers.Input(shape=(${inputSize}, ${inputSize}, 3))\n`;
+        code += `x = inputs\n\n`;
+
+        // Block 1
+        code += `# Block 1\n`;
+        code += `x = layers.Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1')(x)\n`;
+        code += `x = layers.Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2')(x)\n`;
+        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool')(x)\n\n`;
+
+        // Block 2
+        code += `# Block 2\n`;
+        code += `x = layers.Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1')(x)\n`;
+        code += `x = layers.Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2')(x)\n`;
+        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool')(x)\n\n`;
+
+        // Block 3
+        code += `# Block 3\n`;
+        code += `x = layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1')(x)\n`;
+        code += `x = layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2')(x)\n`;
+        code += `x = layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3')(x)\n`;
+        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(x)\n\n`;
+
+        // Block 4
+        code += `# Block 4\n`;
+        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1')(x)\n`;
+        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2')(x)\n`;
+        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3')(x)\n`;
+        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool')(x)\n\n`;
+
+        // Block 5
+        code += `# Block 5\n`;
+        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1')(x)\n`;
+        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2')(x)\n`;
+        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3')(x)\n`;
+        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')(x)\n\n`;
+
+        // Head
+        code += `# Classification head\n`;
+        code += `x = layers.GlobalAveragePooling2D()(x)\n`;
+        code += `x = layers.Dropout(0.2)(x)\n`;
+        code += `outputs = layers.Dense(${numClasses}, activation='softmax', name='predictions')(x)\n`;
+        code += `model = models.Model(inputs, outputs, name='vgg16_from_scratch')\n\n`;
+
+        code += `# Summary\nmodel.summary()\n`;
+        code += `\n# NOTE: Compilation and training steps are included in the exported training pipeline.\n`;
 
         return code;
     },
@@ -369,13 +425,6 @@ outputs = layers.Dense(${numClasses}, activation='softmax')(x)\n\n`;
                     code += `# Build the model
 model = tf.keras.Model(inputs, outputs)
 
-# Compile with different learning rates for fine-tuning
-model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
-    loss='categorical_crossentropy',
-    metrics=['accuracy']
-)
-
 # Model summary
 print(f"Total layers: {len(model.layers)}")
 print(f"Trainable layers: {sum([layer.trainable for layer in model.layers])}")
@@ -393,7 +442,6 @@ model.summary()`;
                         'svm': `import numpy as np
 from sklearn import svm
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
 # Support Vector Machine Classifier
@@ -407,7 +455,6 @@ model = svm.SVC(
                         'knn': `import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
 # K-Nearest Neighbors Classifier
@@ -420,7 +467,6 @@ model = KNeighborsClassifier(
 )`,
                         'randomforest': `import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
 # Random Forest Classifier
@@ -493,34 +539,42 @@ set_seed(42)
 
 `;
 
-        if (isML) {
-            return header + `
-# ============================
-# DATA LOADING (EDIT THIS)
-# ============================
-# Provide X (features) and y (labels) as numpy arrays.
-# Example:
-#   import pandas as pd
-#   df = pd.read_csv("your_data.csv")
-#   X = df.drop("label", axis=1).values
-#   y = df["label"].values
+                if (isML) {
+                    const mlTestSize = parseFloat(state.mlConfig?.preprocessing?.testSize ?? 0.2);
+                    const mlSeed = parseInt(state.mlConfig?.preprocessing?.randomState ?? 42, 10);
 
-# X = ...
-# y = ...
+                    return header + seedBlock + `
+        # ============================
+        # DATA LOADING (EDIT THIS)
+        # ============================
+        # Provide X (features) and y (labels) as numpy arrays.
+        # Example:
+        #   import pandas as pd
+        #   df = pd.read_csv("your_data.csv")
+        #   X = df.drop("label", axis=1).values
+        #   y = df["label"].values
 
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # X = ...
+        # y = ...
 
-` + modelCode + `
+        from sklearn.model_selection import train_test_split
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=${mlTestSize}, random_state=${mlSeed})
 
-print("Done.")
-`;
-        }
+        ` + modelCode + `
+
+        print("Done.")
+        `;
+                }
 
         // DL / Pretrained
-        const inputSize = (state.modelMode === 'pretrained')
-            ? parseInt(document.getElementById('inputSize')?.value || '224', 10)
-            : 224;
+        
+        let inputSize = 224;
+                if (state.modelMode === 'pretrained') {
+                    inputSize = parseInt(document.getElementById('inputSize')?.value || '224', 10);
+                } else if (state.model && state.currentMode !== 'custom') {
+                    // Match default input sizes used by Keras Applications when training from scratch
+                    if (state.model === 'inceptionv3') inputSize = 299;
+                }
 
         const labelMode = (lossFunction.includes('sparse')) ? 'int' : 'categorical';
 
@@ -581,51 +635,83 @@ print("Saved model to deepforge_model.keras")
 `;
     },
 
-    generateColabNotebook() {
-         const pythonScript = this.generatePythonScript();
-                    
-                    const cells = [
-                        {
-                            "cell_type": "markdown",
-                            "metadata": {},
-                            "source": [
-                                "# 🚀 DeepForge Studio - AI Model Training Pipeline\\n",
-                                "\\n",
-                                "**Auto-generated Training Notebook**\\n",
-                                "\\n",
-                                "### ⚡ Quick Start:\\n",
-                                "1. **Enable GPU:** `Runtime → Change runtime type → GPU`\\n",
-                                "2. **Run this notebook:** `Runtime → Run all`\\n",
-                                "3. **Add your data** where indicated in the code\\n",
-                                "4. **Download your trained model** using the last cell\\n",
-                                "\\n",
-                                "---"
-                            ]
-                        },
-                        {
-                            "cell_type": "code",
-                            "execution_count": null,
-                            "metadata": {},
-                            "outputs": [],
-                            "source": pythonScript
-                        }
-                    ];
-                    
-                    return JSON.stringify({
-                        "nbformat": 4,
-                        "nbformat_minor": 0,
-                        "metadata": {
-                            "colab": {
-                                "name": "DeepForge_Training.ipynb",
-                                "provenance": []
-                            },
-                            "kernelspec": {
-                                "name": "python3",
-                                "display_name": "Python 3"
-                            },
-                            "accelerator": "GPU"
-                        },
-                        "cells": cells
-                    }, null, 2);
+        generateColabNotebook() {
+        const pythonScript = this.generatePythonScript();
+
+        const modelLabel = (() => {
+            if (state.currentMode === 'custom') return 'Custom Model';
+            if (state.model && models[state.model]?.name) return models[state.model].name;
+            return state.model || 'Model';
+        })();
+
+        const modeLabel = (() => {
+            if (state.currentMode === 'custom') return 'From Scratch';
+            if (state.model && models[state.model]?.type === 'ml') return 'Classical ML';
+            return (state.modelMode === 'pretrained') ? 'Pretrained' : 'From Scratch';
+        })();
+
+        const safe = (s) => String(s)
+            .replace(/[^a-zA-Z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+
+        const notebookName = `DeepForge_${safe(modelLabel)}_${safe(modeLabel.toLowerCase())}.ipynb`;
+
+        const cells = [
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    `# 🚀 DeepForge Studio - ${modelLabel} (${modeLabel})\n`,
+                    "\n",
+                    "**Auto-generated Training Notebook**\n",
+                    "\n",
+                    "### ⚡ Quick Start:\n",
+                    "1. **Enable GPU:** `Runtime → Change runtime type → GPU`\n",
+                    "2. **Run this notebook:** `Runtime → Run all`\n",
+                    "3. **Set your dataset path** where indicated in the code\n",
+                    "4. **Download the trained model** using the last cell\n",
+                    "\n",
+                    "---"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": null,
+                "metadata": {},
+                "outputs": [],
+                "source": pythonScript
+            },
+            {
+                "cell_type": "code",
+                "execution_count": null,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Download the trained model (Google Colab only)\n",
+                    "try:\n",
+                    "    from google.colab import files\n",
+                    "    files.download('deepforge_model.keras')\n",
+                    "except Exception as e:\n",
+                    "    print('Download is supported in Google Colab only:', e)\n"
+                ]
+            }
+        ];
+
+        return JSON.stringify({
+            "nbformat": 4,
+            "nbformat_minor": 0,
+            "metadata": {
+                "colab": {
+                    "name": notebookName,
+                    "provenance": []
+                },
+                "kernelspec": {
+                    "name": "python3",
+                    "display_name": "Python 3"
+                },
+                "accelerator": "GPU"
+            },
+            "cells": cells
+        }, null, 2);
     }
 };
