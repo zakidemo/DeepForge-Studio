@@ -65,6 +65,11 @@ export const handlers = {
             } else {
                 if (custom) custom.style.display = 'block';
                 state.currentMode = 'custom';
+    // Custom Builder always generates a model "from scratch"
+    state.modelMode = 'scratch';
+    const pretrainedOptions = document.getElementById('pretrainedSettings');
+    if (pretrainedOptions) pretrainedOptions.style.display = 'none';
+
 
                 // Switching to Custom Builder should not keep a previously selected prebuilt/ML model
                 // (e.g., user selects KNN then switches to Custom Builder).
@@ -248,10 +253,11 @@ cancelModelModeModal() {
         }
     },
 
-    exportConfig() {
+        exportConfig() {
         const config = this.buildConfigObject();
         const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-        utils.downloadBlob(blob, `deepforge_config_${new Date().toISOString().slice(0,10)}.json`);
+        const base = this.getExportBaseName();
+        utils.downloadBlob(blob, `${base}.json`);
         utils.notify('Config exported!', 'success');
     },
 
@@ -277,7 +283,7 @@ cancelModelModeModal() {
             exportedAt: new Date().toISOString(),
             model: state.model,
             currentMode: state.currentMode,
-            modelMode: state.modelMode,
+            modelMode: this.getEffectiveModelMode(),
             freezeLayers: getVal('freezeLayers') ?? state.freezeLayers,
             customTop: getVal('customTop') ?? state.customTop,
             inputSize: getVal('inputSize'),
@@ -1313,32 +1319,66 @@ cancelModelModeModal() {
         const modal = document.getElementById('followUpModal');
         modal.classList.remove('active');
         modal.setAttribute('aria-hidden', 'true');
+    },    // -------------------------------------------------
+    // EXPORT NAMING HELPERS
+    // -------------------------------------------------
+    getEffectiveModelMode() {
+        if (state.currentMode === 'custom') return 'scratch';
+        const isML = state.model && models[state.model]?.type === 'ml';
+        if (isML) return 'ml';
+        return state.modelMode || 'scratch';
     },
+
+    getExportBaseName() {
+        const ts = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        // Filename-safe timestamp (Windows-friendly: no ":" characters)
+        const stamp = `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}_${pad(ts.getHours())}-${pad(ts.getMinutes())}-${pad(ts.getSeconds())}`;
+        const modelKey = (state.currentMode === 'custom')
+            ? 'custom_model'
+            : (state.model || 'model');
+        const mode = this.getEffectiveModelMode();
+        // Only allow safe chars
+        return `deepforge_${modelKey}_${mode}_${stamp}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+    },
+
+    downloadNotebook() {
+        const notebook = codeGenerator.generateColabNotebook();
+        const blob = new Blob([notebook], { type: 'application/json' });
+        const base = this.getExportBaseName();
+        utils.downloadBlob(blob, `${base}.ipynb`);
+        utils.notify('Colab notebook downloaded!', 'success');
+    },
+
+    downloadPython() {
+        const code = codeGenerator.generatePythonScript();
+        const blob = new Blob([code], { type: 'text/plain' });
+        const base = this.getExportBaseName();
+        utils.downloadBlob(blob, `${base}.py`);
+        utils.notify('Python script downloaded!', 'success');
+    },
+
+
 
     // -------------------------------------------------
     // EXPORT
     // -------------------------------------------------
-    exportModel(format) {
-        switch(format) {
+        exportModel(format) {
+        switch (format) {
             case 'python':
-                this.downloadCode();
+                this.downloadPython();
                 break;
             case 'colab':
-                const notebook = codeGenerator.generateColabNotebook();
-                const blob = new Blob([notebook], {type: 'application/json'});
-                utils.downloadBlob(blob, 'deepforge_colab_notebook.ipynb');
-                utils.notify('Colab notebook downloaded!');
+                this.downloadNotebook();
                 break;
             default:
                 utils.notify(`Export to ${format} format coming soon!`);
         }
     },
 
+    // Backwards-compatible handler (older buttons call downloadCode)
     downloadCode() {
-        const code = codeGenerator.generatePythonScript();
-        const blob = new Blob([code], {type: 'text/plain'});
-        utils.downloadBlob(blob, 'deepforge_training_script.py');
-        utils.notify('Python script downloaded!');
+        this.downloadPython();
     },
 
     // -------------------------------------------------
@@ -1662,13 +1702,8 @@ const setupEventListeners = () => {
 
     // Code preview / export toolbar
     document.getElementById('copyCodeBtn')?.addEventListener('click', () => handlers.copyGeneratedCode());
-    document.getElementById('downloadPyBtn')?.addEventListener('click', () => handlers.downloadCode());
-    document.getElementById('downloadIpynbBtn')?.addEventListener('click', () => {
-        const notebook = codeGenerator.generateColabNotebook();
-        const blob = new Blob([notebook], {type: 'application/json'});
-        utils.downloadBlob(blob, 'deepforge_colab_notebook.ipynb');
-        utils.notify('Colab notebook downloaded!', 'success');
-    });
+    document.getElementById('downloadPyBtn')?.addEventListener('click', () => handlers.downloadPython());
+    document.getElementById('downloadIpynbBtn')?.addEventListener('click', () => handlers.downloadNotebook());
     document.getElementById('exportConfigBtn')?.addEventListener('click', () => handlers.exportConfig());
     document.getElementById('importConfigBtn')?.addEventListener('click', () => {
         document.getElementById('importConfigInput')?.click();
