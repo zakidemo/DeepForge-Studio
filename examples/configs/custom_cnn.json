@@ -1,34 +1,74 @@
 {
   "version": 1,
-  "exportedAt": "2025-12-15T15:39:35.179457Z",
+  "exportedAt": "2025-12-17T10:38:57.057Z",
   "model": null,
   "currentMode": "custom",
   "modelMode": "scratch",
+  "freezeLayers": "none",
+  "customTop": "default",
+  "inputSize": "224",
+  "numClasses": "5",
+  "optimizer": "adam",
+  "lr": "0.001",
+  "batchSize": "32",
+  "epochs": "50",
+  "lossFunction": "categorical_crossentropy",
   "customLayers": [
     "Conv2D",
-    "MaxPooling2D",
+    "Conv2D",
+    "MaxPool",
+    "Conv2D",
+    "Conv2D",
+    "MaxPool",
     "Flatten",
     "Dense"
   ],
   "customLayerConfigs": [
     {
-      "filters": 32,
-      "kernelSize": 3,
+      "filters": "32",
+      "kernel_size": "3",
+      "stride": "1",
+      "padding": "valid",
       "activation": "relu"
     },
     {
-      "poolSize": 2
+      "filters": "32",
+      "kernel_size": "3",
+      "stride": "1",
+      "padding": "valid",
+      "activation": "relu"
+    },
+    {
+      "pool_size": "2",
+      "stride": "2",
+      "padding": "valid"
+    },
+    {
+      "filters": "32",
+      "kernel_size": "3",
+      "stride": "1",
+      "padding": "valid",
+      "activation": "relu"
+    },
+    {
+      "filters": "32",
+      "kernel_size": "3",
+      "stride": "1",
+      "padding": "valid",
+      "activation": "relu"
+    },
+    {
+      "pool_size": "2",
+      "stride": "2",
+      "padding": "valid"
     },
     {},
     {
-      "units": 10,
-      "activation": "softmax"
+      "units": "128",
+      "activation": "relu",
+      "use_bias": "true"
     }
   ],
-  "numClasses": "10",
-  "optimizer": "adam",
-  "lr": "0.001",
-  "batchSize": "32",
-  "epochs": "10",
-  "lossFunction": "categorical_crossentropy"
+  "mlConfig": null,
+  "language": "en"
 }
