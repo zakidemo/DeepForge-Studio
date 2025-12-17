@@ -435,41 +435,76 @@ model.summary()`;
 
     generateMLCode(modelType, numClasses) {
         const mlConfig = state.mlConfig || {};
-                    const params = mlConfig.params || {};
-                    const preprocessing = mlConfig.preprocessing || { scaleFeatures: true, testSize: 0.2, randomState: 42 };
-                    
-                    const codeTemplates = {
-                        'svm': `import numpy as np
-from sklearn import svm
+        const params = mlConfig.params || {};
+        const preprocessing = mlConfig.preprocessing || { scaleFeatures: true, testSize: 0.2, randomState: 42 };
+
+        const useScaling = preprocessing.scaleFeatures !== false;
+
+        if (modelType === 'knn') {
+            return `from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report
 
-# Support Vector Machine Classifier
-model = svm.SVC(
-    kernel='${params.kernel || 'rbf'}',
-    C=${params.C || 1.0},
-    gamma='${params.gamma || 'scale'}',
-    probability=${params.probability === false ? 'False' : 'True'},
-    random_state=${preprocessing.randomState || 42}
-)`,
-                        'knn': `import numpy as np
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, classification_report
-
-# K-Nearest Neighbors Classifier
-model = KNeighborsClassifier(
+# K-Nearest Neighbors (KNN)
+knn = KNeighborsClassifier(
     n_neighbors=${params.n_neighbors || 5},
     weights='${params.weights || 'uniform'}',
     algorithm='${params.algorithm || 'auto'}',
     metric='${params.metric || 'euclidean'}',
     n_jobs=-1
-)`,
-                        'randomforest': `import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+)
+
+${useScaling ? `pipeline = Pipeline([("scaler", StandardScaler()), ("knn", knn)])` : `pipeline = knn`}
+
+# Train
+pipeline.fit(X_train, y_train)
+
+# Predict
+y_pred = pipeline.predict(X_test)
+
+# Evaluate
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.4f}")
+print("\\nClassification Report:")
+print(classification_report(y_test, y_pred))`;
+        }
+
+        if (modelType === 'svm') {
+            return `from sklearn import svm
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report
 
-# Random Forest Classifier
+# Support Vector Machine (SVM)
+svc = svm.SVC(
+    kernel='${params.kernel || 'rbf'}',
+    C=${params.C || 1.0},
+    gamma='${params.gamma || 'scale'}',
+    probability=${params.probability === false ? 'False' : 'True'},
+    random_state=${preprocessing.randomState || 42}
+)
+
+${useScaling ? `pipeline = Pipeline([("scaler", StandardScaler()), ("svm", svc)])` : `pipeline = svc`}
+
+# Train
+pipeline.fit(X_train, y_train)
+
+# Predict
+y_pred = pipeline.predict(X_test)
+
+# Evaluate
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.4f}")
+print("\\nClassification Report:")
+print(classification_report(y_test, y_pred))`;
+        }
+
+        if (modelType === 'randomforest') {
+            return `from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+# Random Forest
 model = RandomForestClassifier(
     n_estimators=${params.n_estimators || 100},
     max_depth=${params.max_depth || 'None'},
@@ -479,31 +514,22 @@ model = RandomForestClassifier(
     bootstrap=True,
     random_state=${preprocessing.randomState || 42},
     n_jobs=-1
-)`
-                    };
-                    
-                    let code = codeTemplates[modelType] || '# Model implementation';
-                    
-                    code += `
+)
 
-# Data preprocessing
-${preprocessing.scaleFeatures ? `scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)` : '# No feature scaling applied'}
+# Train
+model.fit(X_train, y_train)
 
-# Train the model
-model.fit(${preprocessing.scaleFeatures ? 'X_train_scaled' : 'X_train'}, y_train)
-
-# Make predictions
-y_pred = model.predict(${preprocessing.scaleFeatures ? 'X_test_scaled' : 'X_test'})
+# Predict
+y_pred = model.predict(X_test)
 
 # Evaluate
 accuracy = accuracy_score(y_test, y_pred)
 print(f"Accuracy: {accuracy:.4f}")
 print("\\nClassification Report:")
 print(classification_report(y_test, y_pred))`;
-                    
-                    return code;
+        }
+
+        return '# Unsupported ML model type';
     },
     
     generatePythonScript() {
@@ -522,7 +548,7 @@ print(classification_report(y_test, y_pred))`;
 
 `;
 
-        const seedBlock = `import os, random
+        const seedBlockDL = `import os, random
 import numpy as np
 
 def set_seed(seed=42):
@@ -538,33 +564,56 @@ def set_seed(seed=42):
 set_seed(42)
 
 `;
+const seedBlockML = `import os, random
+import numpy as np
+
+def set_seed(seed=42):
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+set_seed(42)
+
+`;
+
 
                 if (isML) {
                     const mlTestSize = parseFloat(state.mlConfig?.preprocessing?.testSize ?? 0.2);
                     const mlSeed = parseInt(state.mlConfig?.preprocessing?.randomState ?? 42, 10);
 
-                    return header + seedBlock + `
-        # ============================
-        # DATA LOADING (EDIT THIS)
-        # ============================
-        # Provide X (features) and y (labels) as numpy arrays.
-        # Example:
-        #   import pandas as pd
-        #   df = pd.read_csv("your_data.csv")
-        #   X = df.drop("label", axis=1).values
-        #   y = df["label"].values
+                    return header + seedBlockML + `
+# ============================
+# DATA LOADING (EDIT THIS)
+# ============================
+# Provide X (features) and y (labels) as numpy arrays.
+# Example:
+#   import pandas as pd
+#   df = pd.read_csv("your_data.csv")
+#   X = df.drop("label", axis=1).values
+#   y = df["label"].values
+#
+# X = ...
+# y = ...
 
-        # X = ...
-        # y = ...
+# Guard: ensure X and y are defined before proceeding
+try:
+    X
+    y
+except NameError as e:
+    raise NameError("Please define X and y before running. See the DATA LOADING section.") from e
 
-        from sklearn.model_selection import train_test_split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=${mlTestSize}, random_state=${mlSeed})
+from sklearn.model_selection import train_test_split
 
-        ` + modelCode + `
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=${mlTestSize},
+    random_state=${mlSeed}
+)
 
-        print("Done.")
-        `;
-                }
+` + modelCode + `
+
+print("Done.")
+`;                }
 
         // DL / Pretrained
         
@@ -585,13 +634,18 @@ set_seed(42)
             return `tf.keras.optimizers.Adam(learning_rate=${lr})`;
         })();
 
-        return header + seedBlock + modelCode + `
+        return header + seedBlockDL + modelCode + `
 
 # ============================
 # TRAINING PIPELINE (EDIT DATA PATH)
 # ============================
 import tensorflow as tf
 
+# Expected folder structure:
+# DATA_DIR/
+#   class_a/
+#   class_b/
+#   ...
 DATA_DIR = "path/to/your/image_dataset"
 IMG_SIZE = (${inputSize}, ${inputSize})
 BATCH_SIZE = ${batchSize}
@@ -668,7 +722,7 @@ print("Saved model to deepforge_model.keras")
                     "### ⚡ Quick Start:\n",
                     "1. **Enable GPU:** `Runtime → Change runtime type → GPU`\n",
                     "2. **Run this notebook:** `Runtime → Run all`\n",
-                    "3. **Set your dataset path** where indicated in the code\n",
+                    "3. **Set your dataset path** where indicated in the code\n4. Ensure your dataset follows the folder structure: `DATA_DIR/class_name/images...`\n",
                     "4. **Download the trained model** using the last cell\n",
                     "\n",
                     "---"
