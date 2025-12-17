@@ -1,11 +1,33 @@
 {
   "version": 1,
-  "exportedAt": "2025-12-15T15:39:35.179555Z",
+  "exportedAt": "2025-12-17T10:39:10.382Z",
   "model": "knn",
   "currentMode": "prebuilt",
-  "modelMode": "scratch",
+  "modelMode": "ml",
+  "freezeLayers": "none",
+  "customTop": "default",
+  "inputSize": "224",
+  "numClasses": "5",
+  "optimizer": "adam",
+  "lr": "0.001",
+  "batchSize": "32",
+  "epochs": "50",
+  "lossFunction": "categorical_crossentropy",
+  "customLayers": [],
+  "customLayerConfigs": [],
   "mlConfig": {
-    "n_neighbors": 5
+    "modelType": "knn",
+    "params": {
+      "n_neighbors": "5",
+      "weights": "uniform",
+      "algorithm": "auto",
+      "metric": "euclidean"
+    },
+    "preprocessing": {
+      "scaleFeatures": true,
+      "testSize": 0.2,
+      "randomState": 42
+    }
   },
-  "numClasses": "10"
+  "language": "en"
 }
