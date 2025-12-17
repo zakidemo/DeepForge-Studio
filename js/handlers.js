@@ -278,7 +278,7 @@ cancelModelModeModal() {
         // Gather UI values (if present)
         const getVal = (id) => document.getElementById(id)?.value ?? null;
 
-        return {
+        const config = {
             version: 1,
             exportedAt: new Date().toISOString(),
             model: state.model,
@@ -298,8 +298,23 @@ cancelModelModeModal() {
             mlConfig: state.mlConfig,
             language: state.language
         };
-    },
 
+        // Sanitize config by mode to avoid carrying stale settings between ML/DL/custom.
+        const isML = config.modelMode === 'ml';
+        if (isML) {
+            config.customLayers = [];
+            config.customLayerConfigs = [];
+            config.mlConfig = state.mlConfig || null;
+        } else {
+            config.mlConfig = null;
+            if (config.currentMode !== 'custom') {
+                config.customLayers = [];
+                config.customLayerConfigs = [];
+            }
+        }
+
+        return config;
+    },
     applyConfigObject(config) {
         if (!config || typeof config !== 'object') return;
 
