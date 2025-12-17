@@ -8,8 +8,8 @@ authors:
     orcid: "https://orcid.org/0000-0001-5217-4043"
 repository-code: "https://github.com/zakidemo/DeepForge-Studio"
 url: "https://github.com/zakidemo/DeepForge-Studio"
-version: "1.0.0"
-date-released: 2025-12-15
+version: "1.0.3"
+date-released: 2025-12-17
 license: "MIT"
 keywords:
   - "deep learning"
