@@ -597,6 +597,7 @@ cancelModelModeModal() {
     // CUSTOM LAYER BUILDER
     // -------------------------------------------------
     addLayer(type) {
+        state.editingLayerIndex = null;
         const configModals = {
             'Conv2D': this.showConv2DConfig,
             'Dense': this.showDenseConfig,
@@ -616,33 +617,75 @@ cancelModelModeModal() {
         }
     },
 
+    editLayer(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= state.customLayers.length) return;
+
+        const type = state.customLayers[index];
+        state.editingLayerIndex = index;
+        state.pendingLayerType = type;
+
+        const configModals = {
+            'Conv2D': this.showConv2DConfig,
+            'Dense': this.showDenseConfig,
+            'Dropout': this.showDropoutConfig,
+            'MaxPool': this.showMaxPoolConfig,
+            'AvgPool': this.showAvgPoolConfig
+        };
+
+        if (configModals[type]) {
+            configModals[type].call(this);
+        } else {
+            utils.notify('This layer type has no configurable parameters.', 'info');
+        }
+    },
+
+    moveLayer(fromIndex, toIndex) {
+        if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) return;
+        if (fromIndex === toIndex) return;
+        if (fromIndex < 0 || fromIndex >= state.customLayers.length) return;
+        if (toIndex < 0) toIndex = 0;
+        if (toIndex >= state.customLayers.length) toIndex = state.customLayers.length - 1;
+
+        const [layer] = state.customLayers.splice(fromIndex, 1);
+        const [cfg] = state.customLayerConfigs.splice(fromIndex, 1);
+
+        state.customLayers.splice(toIndex, 0, layer);
+        state.customLayerConfigs.splice(toIndex, 0, cfg);
+
+        this.updateCustomLayers();
+        codeGenerator.generateCode();
+    },
+
     showConv2DConfig() {
         const modal = document.getElementById('layerConfigModal');
         const title = document.getElementById('layerConfigTitle');
         const form = document.getElementById('layerConfigForm');
-        
-        title.innerHTML = '<i class="fas fa-cog"></i> Configure Conv2D Layer';
-        
+
+        const isEdit = Number.isInteger(state.editingLayerIndex);
+        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
+
+        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} Conv2D Layer`;
+
         form.innerHTML = `
             <label>Number of Filters</label>
             <input type="number" class="input" id="conv_filters" value="32" min="1" max="512">
-            
+
             <label>Kernel Size</label>
             <select class="input" id="conv_kernel">
                 <option value="3">3x3</option>
                 <option value="5">5x5</option>
                 <option value="7">7x7</option>
            </select>
-           
+
            <label>Stride</label>
            <input type="number" class="input" id="conv_stride" value="1" min="1" max="5">
-           
+
            <label>Padding</label>
            <select class="input" id="conv_padding">
                <option value="valid">Valid</option>
                <option value="same">Same</option>
            </select>
-           
+
            <label>Activation Function</label>
            <select class="input" id="conv_activation">
                <option value="relu">ReLU</option>
@@ -650,13 +693,21 @@ cancelModelModeModal() {
                <option value="tanh">Tanh</option>
                <option value="linear">Linear</option>
            </select>
-           
+
            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
                <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-               <button class="btn btn-success" id="applyConv2DConfigBtn"><i class="fas fa-check"></i> Add Layer</button>
+               <button class="btn btn-success" id="applyConv2DConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
            </div>
        `;
-       
+
+       if (isEdit) {
+           const f = document.getElementById('conv_filters'); if (f) f.value = existing.filters ?? 32;
+           const k = document.getElementById('conv_kernel'); if (k) k.value = existing.kernel_size ?? '3';
+           const s = document.getElementById('conv_stride'); if (s) s.value = existing.stride ?? 1;
+           const p = document.getElementById('conv_padding'); if (p) p.value = existing.padding ?? 'valid';
+           const a = document.getElementById('conv_activation'); if (a) a.value = existing.activation ?? 'relu';
+       }
+
        modal.classList.add('active');
        modal.setAttribute('aria-hidden', 'false');
     },
@@ -665,9 +716,12 @@ cancelModelModeModal() {
         const modal = document.getElementById('layerConfigModal');
         const title = document.getElementById('layerConfigTitle');
         const form = document.getElementById('layerConfigForm');
-        
-        title.innerHTML = '<i class="fas fa-cog"></i> Configure Dense Layer';
-        
+
+        const isEdit = Number.isInteger(state.editingLayerIndex);
+        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
+
+        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} Dense Layer`;
+
         form.innerHTML = `
             <label>Number of Units</label>
             <input type="number" class="input" id="dense_units" value="128" min="1" max="4096">
@@ -686,9 +740,16 @@ cancelModelModeModal() {
             </select>
             <div style="display: flex; justify-content: space-between; margin-top: 20px;">
                 <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-                <button class="btn btn-success" id="applyDenseConfigBtn"><i class="fas fa-check"></i> Add Layer</button>
+                <button class="btn btn-success" id="applyDenseConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
             </div>
         `;
+
+        if (isEdit) {
+            const u = document.getElementById('dense_units'); if (u) u.value = existing.units ?? 128;
+            const a = document.getElementById('dense_activation'); if (a) a.value = existing.activation ?? 'relu';
+            const b = document.getElementById('dense_bias'); if (b) b.value = existing.use_bias ?? 'true';
+        }
+
         modal.classList.add('active');
         modal.setAttribute('aria-hidden', 'false');
     },
@@ -697,15 +758,25 @@ cancelModelModeModal() {
         const modal = document.getElementById('layerConfigModal');
         const title = document.getElementById('layerConfigTitle');
         const form = document.getElementById('layerConfigForm');
-        title.innerHTML = '<i class="fas fa-cog"></i> Configure Dropout Layer';
+
+        const isEdit = Number.isInteger(state.editingLayerIndex);
+        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
+
+        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} Dropout Layer`;
+
         form.innerHTML = `
             <label>Dropout Rate</label>
             <input type="number" class="input" id="dropout_rate" value="0.5" min="0" max="0.9" step="0.1">
             <div style="display: flex; justify-content: space-between; margin-top: 20px;">
                 <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-                <button class="btn btn-success" id="applyDropoutConfigBtn"><i class="fas fa-check"></i> Add Layer</button>
+                <button class="btn btn-success" id="applyDropoutConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
             </div>
         `;
+
+        if (isEdit) {
+            const r = document.getElementById('dropout_rate'); if (r) r.value = existing.rate ?? 0.5;
+        }
+
         modal.classList.add('active');
         modal.setAttribute('aria-hidden', 'false');
     },
@@ -714,7 +785,12 @@ cancelModelModeModal() {
         const modal = document.getElementById('layerConfigModal');
         const title = document.getElementById('layerConfigTitle');
         const form = document.getElementById('layerConfigForm');
-        title.innerHTML = '<i class="fas fa-cog"></i> Configure MaxPooling2D Layer';
+
+        const isEdit = Number.isInteger(state.editingLayerIndex);
+        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
+
+        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} MaxPooling2D Layer`;
+
         form.innerHTML = `
             <label>Pool Size</label>
             <select class="input" id="maxpool_size">
@@ -732,9 +808,16 @@ cancelModelModeModal() {
             </select>
             <div style="display: flex; justify-content: space-between; margin-top: 20px;">
                 <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-                <button class="btn btn-success" id="applyMaxPoolConfigBtn"><i class="fas fa-check"></i> Add Layer</button>
+                <button class="btn btn-success" id="applyMaxPoolConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
             </div>
         `;
+
+        if (isEdit) {
+            const ps = document.getElementById('maxpool_size'); if (ps) ps.value = existing.pool_size ?? '2';
+            const st = document.getElementById('maxpool_stride'); if (st) st.value = existing.stride ?? 2;
+            const pd = document.getElementById('maxpool_padding'); if (pd) pd.value = existing.padding ?? 'valid';
+        }
+
         modal.classList.add('active');
         modal.setAttribute('aria-hidden', 'false');
     },
@@ -743,7 +826,12 @@ cancelModelModeModal() {
         const modal = document.getElementById('layerConfigModal');
         const title = document.getElementById('layerConfigTitle');
         const form = document.getElementById('layerConfigForm');
-        title.innerHTML = '<i class="fas fa-cog"></i> Configure AveragePooling2D Layer';
+
+        const isEdit = Number.isInteger(state.editingLayerIndex);
+        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
+
+        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} AveragePooling2D Layer`;
+
         form.innerHTML = `
             <label>Pool Size</label>
             <select class="input" id="avgpool_size">
@@ -761,22 +849,37 @@ cancelModelModeModal() {
             </select>
             <div style="display: flex; justify-content: space-between; margin-top: 20px;">
                 <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-                <button class="btn btn-success" id="applyAvgPoolConfigBtn"><i class="fas fa-check"></i> Add Layer</button>
+                <button class="btn btn-success" id="applyAvgPoolConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
             </div>
         `;
+
+        if (isEdit) {
+            const ps = document.getElementById('avgpool_size'); if (ps) ps.value = existing.pool_size ?? '2';
+            const st = document.getElementById('avgpool_stride'); if (st) st.value = existing.stride ?? 2;
+            const pd = document.getElementById('avgpool_padding'); if (pd) pd.value = existing.padding ?? 'valid';
+        }
+
         modal.classList.add('active');
         modal.setAttribute('aria-hidden', 'false');
     },
 
     applyLayerConfig(type, config) {
-        state.customLayers.push(type);
-        state.customLayerConfigs.push(config);
-        
+        const isEdit = Number.isInteger(state.editingLayerIndex);
+
+        if (isEdit) {
+            const idx = state.editingLayerIndex;
+            state.customLayers[idx] = type;
+            state.customLayerConfigs[idx] = config;
+        } else {
+            state.customLayers.push(type);
+            state.customLayerConfigs.push(config);
+        }
+
         this.updateCustomLayers();
         codeGenerator.generateCode();
         this.closeLayerConfig();
-        
-        utils.notify(`${type} layer added`);
+
+        utils.notify(isEdit ? `${type} layer updated` : `${type} layer added`, 'success');
     },
 
     closeLayerConfig() {
@@ -784,34 +887,43 @@ cancelModelModeModal() {
         modal.classList.remove('active');
         modal.setAttribute('aria-hidden', 'true');
         state.pendingLayerType = null;
+        state.editingLayerIndex = null;
     },
 
     updateCustomLayers() {
         const layersDiv = document.getElementById('layers');
         if (!layersDiv) return;
-        
+
         if (state.customLayers.length === 0) {
-            layersDiv.innerHTML = '<p class="text-center opacity-75">Drag and drop layers here or use the buttons above</p>';
+            layersDiv.innerHTML = '<p class="text-center opacity-75">Drag & drop layers here, or click the buttons above</p>';
         } else {
             layersDiv.innerHTML = state.customLayers.map((layer, i) => {
                 const config = state.customLayerConfigs[i] || {};
                 let configText = '';
-                
+
                 if (layer === 'Conv2D') configText = ` (${config.filters || 32} filters, ${config.kernel_size || 3}x${config.kernel_size || 3})`;
                 else if (layer === 'Dense') configText = ` (${config.units || 128} units)`;
                 else if (layer === 'Dropout') configText = ` (${config.rate || 0.5})`;
                 else if (layer === 'MaxPool' || layer === 'AvgPool') configText = ` (${config.pool_size || 2}x${config.pool_size || 2})`;
-                
+
                 const layerObj = layerTypes.find(l => l.type === layer);
                 const icon = layerObj ? layerObj.icon : 'fas fa-cube';
-                
-                return `<span class="layer-block">
-                    <i class="${icon}"></i> 
-                    ${layer}${configText}
-                    <span data-remove="${i}" style="cursor:pointer; color:#ff5555;">
-                        <i class="fas fa-times"></i>
-                    </span>
-                </span>`;
+
+                return `
+                <div class="layer-block" draggable="true" data-layer-index="${i}">
+                    <div class="layer-left">
+                        <i class="${icon}"></i>
+                        <span>${layer}${configText}</span>
+                    </div>
+                    <div class="layer-actions">
+                        <button class="layer-action-btn" type="button" title="Edit layer" aria-label="Edit layer" data-edit="${i}">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button class="layer-action-btn" type="button" title="Remove layer" aria-label="Remove layer" data-remove="${i}" style="color:#ff5555;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>`;
             }).join('');
         }
     },
@@ -1478,23 +1590,25 @@ const renderModels = () => {
 const renderLayerButtons = () => {
     const container = document.getElementById('layerButtons');
     if (!container) return;
-    
+
     const fragment = document.createDocumentFragment();
-    
+
     layerTypes.forEach(layer => {
         const button = document.createElement('button');
-        button.className = 'btn btn-secondary';
+        button.className = 'btn btn-secondary layer-palette-item';
         button.dataset.layer = layer.type;
+        button.setAttribute('draggable', 'true');
+        button.setAttribute('title', `Drag to add ${layer.type} or click to configure`);
         button.innerHTML = `<i class="${layer.icon}"></i> ${layer.type}`;
         fragment.appendChild(button);
     });
-    
+
     const clearButton = document.createElement('button');
     clearButton.className = 'btn btn-danger';
     clearButton.id = 'clearLayersBtn';
     clearButton.innerHTML = '<i class="fas fa-trash"></i> Clear All';
     fragment.appendChild(clearButton);
-    
+
     container.innerHTML = '';
     container.appendChild(fragment);
 };
@@ -1564,6 +1678,10 @@ const setupEventListeners = () => {
         // Open Layer Config
         if (e.target.closest('[data-layer]')) {
             handlers.addLayer(e.target.closest('[data-layer]').dataset.layer);
+        }
+        // Edit Layer
+        if (e.target.closest('[data-edit]')) {
+            handlers.editLayer(parseInt(e.target.closest('[data-edit]').dataset.edit));
         }
         // Remove Layer
         if (e.target.closest('[data-remove]')) {
@@ -1679,6 +1797,95 @@ const setupEventListeners = () => {
             e.preventDefault();
             handlers.resetRecommendationForm();
         }
+
+    // -------------------------------------------------
+    // Drag & Drop for Custom Builder
+    // - Reorder existing layers
+    // - Drag from layer palette to add new layers
+    // -------------------------------------------------
+    const layerContainer = document.getElementById('layers');
+    let dragPayload = null;
+
+    document.addEventListener('dragstart', (e) => {
+        const paletteItem = e.target.closest('.layer-palette-item');
+        const layerBlock = e.target.closest('.layer-block');
+
+        if (paletteItem && paletteItem.dataset.layer) {
+            dragPayload = { kind: 'palette', layer: paletteItem.dataset.layer };
+            e.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+            e.dataTransfer.effectAllowed = 'copy';
+            return;
+        }
+
+        if (layerBlock && layerBlock.dataset.layerIndex != null) {
+            dragPayload = { kind: 'reorder', index: parseInt(layerBlock.dataset.layerIndex) };
+            e.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+            e.dataTransfer.effectAllowed = 'move';
+            layerBlock.classList.add('dragging');
+        }
+    });
+
+    document.addEventListener('dragend', (e) => {
+        document.querySelectorAll('.layer-block.dragging').forEach(el => el.classList.remove('dragging'));
+        document.querySelectorAll('.layer-block.drag-over').forEach(el => el.classList.remove('drag-over'));
+        layerContainer?.classList.remove('drag-over');
+        dragPayload = null;
+    });
+
+    layerContainer?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        layerContainer.classList.add('drag-over');
+
+        const afterEl = e.target.closest('.layer-block');
+        document.querySelectorAll('.layer-block.drag-over').forEach(el => el.classList.remove('drag-over'));
+        if (afterEl) afterEl.classList.add('drag-over');
+
+        const text = e.dataTransfer.getData('text/plain');
+        try { dragPayload = JSON.parse(text); } catch { /* ignore */ }
+
+        if (dragPayload?.kind === 'palette') e.dataTransfer.dropEffect = 'copy';
+        else e.dataTransfer.dropEffect = 'move';
+    });
+
+    layerContainer?.addEventListener('dragleave', (e) => {
+        if (!layerContainer.contains(e.relatedTarget)) {
+            layerContainer.classList.remove('drag-over');
+            document.querySelectorAll('.layer-block.drag-over').forEach(el => el.classList.remove('drag-over'));
+        }
+    });
+
+    layerContainer?.addEventListener('drop', (e) => {
+        e.preventDefault();
+        layerContainer.classList.remove('drag-over');
+        document.querySelectorAll('.layer-block.drag-over').forEach(el => el.classList.remove('drag-over'));
+
+        let payload = dragPayload;
+        const text = e.dataTransfer.getData('text/plain');
+        try { payload = payload || JSON.parse(text); } catch { /* ignore */ }
+        if (!payload) return;
+
+        const dropTarget = e.target.closest('.layer-block');
+        const toIndexRaw = dropTarget ? parseInt(dropTarget.dataset.layerIndex) : state.customLayers.length - 1;
+
+        if (payload.kind === 'palette') {
+            handlers.addLayer(payload.layer);
+            return;
+        }
+
+        if (payload.kind === 'reorder') {
+            const fromIndex = payload.index;
+            let toIndex = Number.isInteger(toIndexRaw) ? toIndexRaw : state.customLayers.length - 1;
+
+            // If dropping below the last item, keep as last
+            if (!dropTarget) toIndex = state.customLayers.length - 1;
+
+            // When moving down, account for removal shift
+            if (toIndex > fromIndex) toIndex -= 1;
+
+            handlers.moveLayer(fromIndex, toIndex);
+        }
+    });
+
     });
 
     // Static Button Listeners
