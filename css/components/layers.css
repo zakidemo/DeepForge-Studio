@@ -2,3 +2,14 @@
 .layer-block:hover { background: rgba(80, 250, 123, 0.2); transform: scale(1.05); }
 .layer-block i { color: var(--accent-green); }
 .layer-container { min-height: 80px; border: 2px dashed var(--border-hover); border-radius: var(--radius-lg); padding: var(--spacing-lg); margin: var(--spacing-lg) 0; background: rgba(30, 30, 46, 0.3); }
+/* ---- Drag & Drop + Edit controls (v1.0.3) ---- */
+.layer-block { width: 100%; justify-content: space-between; }
+.layer-block .layer-left { display: inline-flex; align-items: center; gap: var(--spacing-sm); }
+.layer-block .layer-actions { display: inline-flex; align-items: center; gap: var(--spacing-sm); }
+.layer-block .layer-action-btn { background: transparent; border: 0; color: inherit; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.layer-block .layer-action-btn:hover { background: rgba(255,255,255,0.08); }
+.layer-block.dragging { opacity: 0.55; transform: scale(1.01); }
+.layer-block.drag-over { outline: 2px dashed rgba(189, 147, 249, 0.9); outline-offset: 3px; }
+.layer-container.drag-over { background: rgba(189, 147, 249, 0.08); border-color: rgba(189, 147, 249, 0.6); }
+.layer-palette-item { cursor: grab; }
+.layer-palette-item:active { cursor: grabbing; }
