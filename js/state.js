@@ -4,6 +4,7 @@ export const state = {
     customLayerConfigs: [],
     currentMode: 'prebuilt',
     pendingLayerType: null,
+    editingLayerIndex: null,
     modelMode: 'pretrained',
     freezeLayers: 'base',
     customTop: 'default',
