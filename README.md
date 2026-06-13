@@ -3,6 +3,8 @@
 **DeepForge Studio** is an open-source, client-side web application for rapid deep learning prototyping and reproducible code export.  
 It provides a visual workflow to select pre-built architectures or build custom layer stacks, configure training hyperparameters, and export a complete runnable training pipeline.
 
+https://github.com/user-attachments/assets/c6ebc1f2-2e02-4b17-864f-553a39d7e794
+
 ## Exports
 - **Python script**: `.py`
 - **Google Colab notebook**: `.ipynb`
