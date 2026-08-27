@@ -1,4 +1,4 @@
-# DeepForge Studio - Exported Training Pipeline
+# Layernaut Studio - Exported Training Pipeline
 # Generated: 2025-12-17T10:38:55.786Z
 
 import os, random
@@ -86,5 +86,5 @@ model.compile(
 
 history = model.fit(train_ds, validation_data=val_ds, epochs=EPOCHS)
 
-model.save("deepforge_model.keras")
-print("Saved model to deepforge_model.keras")
+model.save("layernaut_model.keras")
+print("Saved model to layernaut_model.keras")

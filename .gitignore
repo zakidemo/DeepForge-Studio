@@ -1,0 +1,7 @@
+# test artefacts
+generated/
+testdata/
+sweep/
+*.keras
+run_all_report.json
+report.json

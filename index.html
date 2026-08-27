@@ -3,11 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="DeepForge Studio - Advanced AI Model Builder with Full Configuration Export for Google Colab">
-    <meta name="author" content="DeepForge Team">
-    <title>DeepForge Studio - Advanced AI Model Builder</title>
+    <meta name="description" content="Layernaut Studio - Advanced AI Model Builder with Full Configuration Export for Google Colab">
+    <meta name="author" content="Layernaut Team">
+    <title>Layernaut Studio - Advanced AI Model Builder</title>
     
     <!-- External Dependencies -->
+    <!-- Restricts where scripts may come from and where data may be sent, which
+         narrows the cross-site scripting surface that an API key held in the
+         browser would otherwise be exposed to (Reviewer 3, comment 3.4b). -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+                   script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
+                   style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
+                   font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
+                   img-src 'self' data: https:;
+                   connect-src 'self' https://generativelanguage.googleapis.com;
+                   object-src 'none';
+                   base-uri 'self';
+                   form-action 'none';
+                   frame-ancestors 'none'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/intro.js@7.2.0/intro.min.js"></script>
@@ -35,7 +49,7 @@
                <div class="header-left">
                    <h1 id="app-title">
                        <i class="fas fa-brain" aria-hidden="true"></i>
-                       <span data-translate="app-title">DeepForge Studio</span>
+                       <span data-translate="app-title">Layernaut Studio</span>
                    </h1>
                    <p id="app-description" data-translate="app-description">
                        Advanced AI Model Builder - Full Configuration Export for Colab
@@ -150,8 +164,8 @@
                                <i class="fas fa-lock" aria-hidden="true"></i> Freeze Layers
                            </label>
                            <select class="input" id="freezeLayers">
+                               <option value="base" selected>Freeze base model (recommended)</option>
                                <option value="none">None - Train all layers</option>
-                               <option value="base">Freeze base model</option>
                                <option value="partial">Freeze first 50% layers</option>
                                <option value="all_but_last">Freeze all except last layer</option>
                            </select>
@@ -342,6 +356,12 @@
                                </div>
                            </div>
                            
+                                   <div id="geminiModelGroup" hidden style="margin-top:12px;">
+                                       <label for="geminiModel">Provider model</label>
+                                       <select class="input" id="geminiModel"></select>
+                                       <small>Populated from your account when you connect. If the provider retires a model, reconnect and pick another here.</small>
+                                   </div>
+
                            <div class="guide-step">
                                <div class="guide-number">3</div>
                                <div class="guide-content">
@@ -757,6 +777,10 @@
                        <button class="btn btn-primary" id="downloadIpynbBtn">
                            <i class="fab fa-google" aria-hidden="true"></i> Download .ipynb
                        </button>
+                       <button class="btn btn-success" id="downloadCapsuleBtn"
+                               title="Script, notebook, specification, pinned requirements and environment notes in one archive">
+                           <i class="fas fa-box-archive" aria-hidden="true"></i> Download capsule (.zip)
+                       </button>
                        <button class="btn btn-outline" id="exportConfigBtn">
                            <i class="fas fa-file-export" aria-hidden="true"></i> Export Config (.json)
                        </button>
@@ -765,7 +789,7 @@
                        </button>
                        <input id="importConfigInput" type="file" accept="application/json" style="display:none" />
                        <small class="opacity-75" style="margin-left:auto;">
-                           Tip: export/import configs for reproducibility
+                           Tip: the capsule packages the run; the config alone stores the specification
                        </small>
                    </div>
 

@@ -9,7 +9,7 @@ export const state = {
     freezeLayers: 'base',
     customTop: 'default',
     mlConfig: null,
-    language: localStorage.getItem('deepforge_language') || 'en',
+    language: localStorage.getItem('layernaut_language') || 'en',
     aiOptimizerState: {
         isConnected: false,
         currentStep: 1,

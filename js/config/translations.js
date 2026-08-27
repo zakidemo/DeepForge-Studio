@@ -1,6 +1,6 @@
 export const translations = {
     en: {
-        'app-title': 'DeepForge Studio',
+        'app-title': 'Layernaut Studio',
         'app-description': 'Advanced AI Model Builder - Full Configuration Export for Colab',
         'language-label': 'Language:',
         'tab-architecture': 'Architecture',

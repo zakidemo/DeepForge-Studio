@@ -5,13 +5,13 @@ import { ModelVisualSystem } from './visualizations.js';
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("🚀 DeepForge Studio Starting...");
+    console.log("🚀 Layernaut Studio Starting...");
     init();
 });
 
 // Expose necessary objects to the window for inline HTML onclick events
-// (Because some of your HTML strings have onclick="DeepForgeStudio.handlers...")
-window.DeepForgeStudio = {
+// (Because some of your HTML strings have onclick="LayernautStudio.handlers...")
+window.LayernautStudio = {
     handlers: handlers,
     utils: utils,
     state: state

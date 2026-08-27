@@ -6,6 +6,11 @@ import { translations } from './config/translations.js';
 import { utils } from './utils.js';
 import { codeGenerator } from './code-generator.js';
 import { geminiOptimizer } from './gemini.js';
+import { LAYER_PARAMS } from './config/layer-params.js';
+import { makeZip, requirementsTxt, environmentMd, capsuleReadme } from './capsule.js';
+
+// Single source of truth for the version stamped into exports.
+export const TOOL_VERSION = '2.5.0';
 import { ModelVisualSystem } from './visualizations.js';
 
 // =====================================================
@@ -279,8 +284,11 @@ cancelModelModeModal() {
         const getVal = (id) => document.getElementById(id)?.value ?? null;
 
         const config = {
-            version: 1,
+            schemaVersion: 2,
+            toolVersion: TOOL_VERSION,
             exportedAt: new Date().toISOString(),
+            seed: parseInt(state.mlConfig?.preprocessing?.randomState ?? 42, 10),
+            dataset: getVal('datasetIdentifier') || null,
             model: state.model,
             currentMode: state.currentMode,
             modelMode: this.getEffectiveModelMode(),
@@ -323,7 +331,7 @@ cancelModelModeModal() {
         if (config.modelMode) state.modelMode = config.modelMode;
         if (config.language) {
             state.language = config.language;
-            localStorage.setItem('deepforge_language', state.language);
+            localStorage.setItem('layernaut_language', state.language);
         }
 
         // Apply basic inputs
@@ -370,11 +378,59 @@ cancelModelModeModal() {
         codeGenerator.generateCode();
 
         // Save config locally too
-        localStorage.setItem('deepforge_config', JSON.stringify(this.buildConfigObject()));
+        localStorage.setItem('layernaut_config', JSON.stringify(this.buildConfigObject()));
+    },
+
+    // Reviewer 3, comment 3.3: the JSON snapshot describes the experiment but
+    // does not let anyone re-run it. The capsule adds the seeded script, the
+    // notebook, pinned requirements and an honest account of what is not pinned.
+    downloadCapsule() {
+        let script, notebook;
+        try {
+            script = codeGenerator.generatePythonScript();
+            notebook = codeGenerator.generateColabNotebook();
+        } catch (err) {
+            utils.notify(err.message, 'error');
+            return;
+        }
+
+        const config = this.buildConfigObject();
+        const isML = config.modelMode === 'ml';
+        const usesXgboost = isML && state.model === 'xgboost';
+
+        const files = [
+            { name: 'train.py', content: script },
+            { name: 'notebook.ipynb', content: notebook },
+            { name: 'config.json', content: JSON.stringify(config, null, 2) },
+            { name: 'requirements.txt', content: requirementsTxt(isML, usesXgboost) },
+            { name: 'ENVIRONMENT.md', content: environmentMd(config, config.seed) },
+            { name: 'README.md', content: capsuleReadme(config) }
+        ];
+
+        utils.downloadBlob(makeZip(files), `${this.getExportBaseName()}_capsule.zip`);
+        utils.notify('Reproducibility capsule downloaded', 'success');
+    },
+
+    // Renders the discovered models so the user can switch provider model
+    // without waiting for a new release of this software.
+    populateModelSelect(available, current) {
+        const select = document.getElementById('geminiModel');
+        if (!select) return;
+        select.innerHTML = available
+            .map(m => `<option value="${m}" ${m === current ? 'selected' : ''}>${m}</option>`)
+            .join('');
+        document.getElementById('geminiModelGroup')?.removeAttribute('hidden');
+    },
+
+    onModelChange() {
+        const select = document.getElementById('geminiModel');
+        if (!select || !select.value) return;
+        geminiOptimizer.setModel(select.value);
+        utils.notify(`Using ${select.value}`, 'info');
     },
 
     clearApiKey() {
-        localStorage.removeItem('gemini_api_key');
+        geminiOptimizer.clearApiKey();
         const input = document.getElementById('geminiApiKey');
         if (input) input.value = '';
         utils.notify('API key cleared from this browser.', 'success');
@@ -491,7 +547,12 @@ cancelModelModeModal() {
     // -------------------------------------------------
     showMLConfigModal(modelType) {
         const config = mlConfigurations[modelType];
-        if (!config) return;
+        if (!config) {
+            // Previously this returned silently, so selecting an unconfigured
+            // model gave the user no panel and no explanation.
+            utils.notify(`No parameter panel is defined for "${modelType}". Please report this as a bug.`, 'error');
+            return;
+        }
         
         const modal = document.getElementById('mlConfigModal');
         const title = document.getElementById('mlConfigTitle');
@@ -598,23 +659,8 @@ cancelModelModeModal() {
     // -------------------------------------------------
     addLayer(type) {
         state.editingLayerIndex = null;
-        const configModals = {
-            'Conv2D': this.showConv2DConfig,
-            'Dense': this.showDenseConfig,
-            'Dropout': this.showDropoutConfig,
-            'MaxPool': this.showMaxPoolConfig,
-            'AvgPool': this.showAvgPoolConfig
-        };
-        
-        if (configModals[type]) {
-            state.pendingLayerType = type;
-            configModals[type](); 
-        } else {
-            state.customLayers.push(type);
-            state.customLayerConfigs.push({});
-            this.updateCustomLayers();
-            codeGenerator.generateCode();
-        }
+        state.pendingLayerType = type;
+        this.showLayerConfig();
     },
 
     editLayer(index) {
@@ -624,19 +670,7 @@ cancelModelModeModal() {
         state.editingLayerIndex = index;
         state.pendingLayerType = type;
 
-        const configModals = {
-            'Conv2D': this.showConv2DConfig,
-            'Dense': this.showDenseConfig,
-            'Dropout': this.showDropoutConfig,
-            'MaxPool': this.showMaxPoolConfig,
-            'AvgPool': this.showAvgPoolConfig
-        };
-
-        if (configModals[type]) {
-            configModals[type].call(this);
-        } else {
-            utils.notify('This layer type has no configurable parameters.', 'info');
-        }
+        this.showLayerConfig();
     },
 
     moveLayer(fromIndex, toIndex) {
@@ -656,211 +690,104 @@ cancelModelModeModal() {
         codeGenerator.generateCode();
     },
 
-    showConv2DConfig() {
-        const modal = document.getElementById('layerConfigModal');
-        const title = document.getElementById('layerConfigTitle');
-        const form = document.getElementById('layerConfigForm');
-
-        const isEdit = Number.isInteger(state.editingLayerIndex);
-        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
-
-        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} Conv2D Layer`;
-
-        form.innerHTML = `
-            <label>Number of Filters</label>
-            <input type="number" class="input" id="conv_filters" value="32" min="1" max="512">
-
-            <label>Kernel Size</label>
-            <select class="input" id="conv_kernel">
-                <option value="3">3x3</option>
-                <option value="5">5x5</option>
-                <option value="7">7x7</option>
-           </select>
-
-           <label>Stride</label>
-           <input type="number" class="input" id="conv_stride" value="1" min="1" max="5">
-
-           <label>Padding</label>
-           <select class="input" id="conv_padding">
-               <option value="valid">Valid</option>
-               <option value="same">Same</option>
-           </select>
-
-           <label>Activation Function</label>
-           <select class="input" id="conv_activation">
-               <option value="relu">ReLU</option>
-               <option value="sigmoid">Sigmoid</option>
-               <option value="tanh">Tanh</option>
-               <option value="linear">Linear</option>
-           </select>
-
-           <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-               <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-               <button class="btn btn-success" id="applyConv2DConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
-           </div>
-       `;
-
-       if (isEdit) {
-           const f = document.getElementById('conv_filters'); if (f) f.value = existing.filters ?? 32;
-           const k = document.getElementById('conv_kernel'); if (k) k.value = existing.kernel_size ?? '3';
-           const s = document.getElementById('conv_stride'); if (s) s.value = existing.stride ?? 1;
-           const p = document.getElementById('conv_padding'); if (p) p.value = existing.padding ?? 'valid';
-           const a = document.getElementById('conv_activation'); if (a) a.value = existing.activation ?? 'relu';
-       }
-
-       modal.classList.add('active');
-       modal.setAttribute('aria-hidden', 'false');
-    },
-
-    showDenseConfig() {
-        const modal = document.getElementById('layerConfigModal');
-        const title = document.getElementById('layerConfigTitle');
-        const form = document.getElementById('layerConfigForm');
-
-        const isEdit = Number.isInteger(state.editingLayerIndex);
-        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
-
-        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} Dense Layer`;
-
-        form.innerHTML = `
-            <label>Number of Units</label>
-            <input type="number" class="input" id="dense_units" value="128" min="1" max="4096">
-            <label>Activation Function</label>
-            <select class="input" id="dense_activation">
-                <option value="relu">ReLU</option>
-                <option value="sigmoid">Sigmoid</option>
-                <option value="tanh">Tanh</option>
-                <option value="softmax">Softmax</option>
-                <option value="linear">Linear</option>
-            </select>
-            <label>Use Bias</label>
-            <select class="input" id="dense_bias">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-            </select>
-            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-                <button class="btn btn-success" id="applyDenseConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
-            </div>
-        `;
-
-        if (isEdit) {
-            const u = document.getElementById('dense_units'); if (u) u.value = existing.units ?? 128;
-            const a = document.getElementById('dense_activation'); if (a) a.value = existing.activation ?? 'relu';
-            const b = document.getElementById('dense_bias'); if (b) b.value = existing.use_bias ?? 'true';
+    // One modal for every layer type, built from LAYER_PARAMS, plus the skip
+    // connection control. Five hand-written modals previously covered five of
+    // the ten layer types; the rest could not be configured at all.
+    showLayerConfig() {
+        const type = state.pendingLayerType;
+        const spec = LAYER_PARAMS[type];
+        if (!spec) {
+            utils.notify(`No parameter definition for layer "${type}". Please report this as a bug.`, 'error');
+            return;
         }
 
+        const modal = document.getElementById('layerConfigModal');
+        const title = document.getElementById('layerConfigTitle');
+        const form = document.getElementById('layerConfigForm');
+
+        const isEdit = Number.isInteger(state.editingLayerIndex);
+        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
+
+        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} ${type} Layer`;
+
+        let html = '';
+        spec.forEach(p => {
+            const id = `layercfg_${p.key}`;
+            const value = existing[p.key] ?? p.default;
+            html += `<label for="${id}">${p.label}</label>`;
+            if (p.type === 'select') {
+                html += `<select class="input" id="${id}" data-key="${p.key}" data-kind="select">`;
+                p.options.forEach(([v, lbl]) => {
+                    html += `<option value="${v}" ${String(v) === String(value) ? 'selected' : ''}>${lbl}</option>`;
+                });
+                html += `</select>`;
+            } else if (p.type === 'checkbox') {
+                html += `<label style="display:flex;align-items:center;gap:10px;">
+                    <input type="checkbox" id="${id}" data-key="${p.key}" data-kind="checkbox" ${value ? 'checked' : ''}>
+                    <span>Enable</span></label>`;
+            } else {
+                html += `<input type="number" class="input" id="${id}" data-key="${p.key}" data-kind="number"
+                         value="${value}" min="${p.min ?? 0}" max="${p.max ?? 9999}" step="${p.step ?? 1}">`;
+            }
+            if (p.help) html += `<small>${p.help}</small>`;
+        });
+        if (!spec.length) {
+            html += `<p class="opacity-75">${type} has no parameters to configure.</p>`;
+        }
+
+        html += this.skipConnectionHTML(existing, isEdit ? state.editingLayerIndex : state.customLayers.length);
+
+        html += `
+            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
+                <button class="btn btn-success" id="applyLayerConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
+            </div>`;
+
+        form.innerHTML = html;
         modal.classList.add('active');
         modal.setAttribute('aria-hidden', 'false');
     },
 
-    showDropoutConfig() {
-        const modal = document.getElementById('layerConfigModal');
-        const title = document.getElementById('layerConfigTitle');
-        const form = document.getElementById('layerConfigForm');
-
-        const isEdit = Number.isInteger(state.editingLayerIndex);
-        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
-
-        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} Dropout Layer`;
-
-        form.innerHTML = `
-            <label>Dropout Rate</label>
-            <input type="number" class="input" id="dropout_rate" value="0.5" min="0" max="0.9" step="0.1">
-            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-                <button class="btn btn-success" id="applyDropoutConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
-            </div>
-        `;
-
-        if (isEdit) {
-            const r = document.getElementById('dropout_rate'); if (r) r.value = existing.rate ?? 0.5;
+    // Skip connections are what make residual blocks possible. Only layers that
+    // already exist before this one can be a source, so the list is built from
+    // the current stack.
+    skipConnectionHTML(existing, position) {
+        const candidates = state.customLayers.slice(0, position);
+        if (!candidates.length) {
+            return `<hr><small class="opacity-75">Skip connections become available once there is an earlier layer to connect from.</small>`;
         }
-
-        modal.classList.add('active');
-        modal.setAttribute('aria-hidden', 'false');
+        const current = existing.skipFrom;
+        let html = `<hr>
+            <label for="layercfg_skipFrom">Skip connection (optional)</label>
+            <select class="input" id="layercfg_skipFrom">
+                <option value="">None</option>`;
+        candidates.forEach((layer, i) => {
+            html += `<option value="${i}" ${String(current) === String(i) ? 'selected' : ''}>From layer ${i + 1} (${layer})</option>`;
+        });
+        html += `</select>
+            <small>Merges the output of an earlier layer back in at this point. This is how residual blocks are built.</small>
+            <label for="layercfg_skipMerge">Merge type</label>
+            <select class="input" id="layercfg_skipMerge">
+                <option value="add" ${existing.skipMerge !== 'concat' ? 'selected' : ''}>Add (shapes must match exactly)</option>
+                <option value="concat" ${existing.skipMerge === 'concat' ? 'selected' : ''}>Concatenate (all but the last dimension must match)</option>
+            </select>`;
+        return html;
     },
 
-    showMaxPoolConfig() {
-        const modal = document.getElementById('layerConfigModal');
-        const title = document.getElementById('layerConfigTitle');
-        const form = document.getElementById('layerConfigForm');
-
-        const isEdit = Number.isInteger(state.editingLayerIndex);
-        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
-
-        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} MaxPooling2D Layer`;
-
-        form.innerHTML = `
-            <label>Pool Size</label>
-            <select class="input" id="maxpool_size">
-                <option value="2">2x2</option>
-                <option value="3">3x3</option>
-                <option value="4">4x4</option>
-                <option value="5">5x5</option>
-            </select>
-            <label>Stride</label>
-            <input type="number" class="input" id="maxpool_stride" value="2" min="1" max="5">
-            <label>Padding</label>
-            <select class="input" id="maxpool_padding">
-                <option value="valid">Valid</option>
-                <option value="same">Same</option>
-            </select>
-            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-                <button class="btn btn-success" id="applyMaxPoolConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
-            </div>
-        `;
-
-        if (isEdit) {
-            const ps = document.getElementById('maxpool_size'); if (ps) ps.value = existing.pool_size ?? '2';
-            const st = document.getElementById('maxpool_stride'); if (st) st.value = existing.stride ?? 2;
-            const pd = document.getElementById('maxpool_padding'); if (pd) pd.value = existing.padding ?? 'valid';
+    readLayerConfig() {
+        const config = {};
+        document.querySelectorAll('#layerConfigForm [data-key]').forEach(el => {
+            const key = el.dataset.key;
+            if (el.dataset.kind === 'checkbox') config[key] = el.checked;
+            else if (el.dataset.kind === 'number') config[key] = parseFloat(el.value);
+            else config[key] = el.value;
+        });
+        const from = document.getElementById('layercfg_skipFrom')?.value;
+        if (from !== undefined && from !== '') {
+            config.skipFrom = parseInt(from, 10);
+            config.skipMerge = document.getElementById('layercfg_skipMerge')?.value || 'add';
         }
-
-        modal.classList.add('active');
-        modal.setAttribute('aria-hidden', 'false');
-    },
-
-    showAvgPoolConfig() {
-        const modal = document.getElementById('layerConfigModal');
-        const title = document.getElementById('layerConfigTitle');
-        const form = document.getElementById('layerConfigForm');
-
-        const isEdit = Number.isInteger(state.editingLayerIndex);
-        const existing = isEdit ? (state.customLayerConfigs[state.editingLayerIndex] || {}) : {};
-
-        title.innerHTML = `<i class="fas fa-cog"></i> ${isEdit ? 'Edit' : 'Configure'} AveragePooling2D Layer`;
-
-        form.innerHTML = `
-            <label>Pool Size</label>
-            <select class="input" id="avgpool_size">
-                <option value="2">2x2</option>
-                <option value="3">3x3</option>
-                <option value="4">4x4</option>
-                <option value="5">5x5</option>
-            </select>
-            <label>Stride</label>
-            <input type="number" class="input" id="avgpool_stride" value="2" min="1" max="5">
-            <label>Padding</label>
-            <select class="input" id="avgpool_padding">
-                <option value="valid">Valid</option>
-                <option value="same">Same</option>
-            </select>
-            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                <button class="btn btn-danger" id="cancelLayerConfigBtn"><i class="fas fa-times"></i> Cancel</button>
-                <button class="btn btn-success" id="applyAvgPoolConfigBtn"><i class="fas fa-check"></i> ${isEdit ? 'Save Changes' : 'Add Layer'}</button>
-            </div>
-        `;
-
-        if (isEdit) {
-            const ps = document.getElementById('avgpool_size'); if (ps) ps.value = existing.pool_size ?? '2';
-            const st = document.getElementById('avgpool_stride'); if (st) st.value = existing.stride ?? 2;
-            const pd = document.getElementById('avgpool_padding'); if (pd) pd.value = existing.padding ?? 'valid';
-        }
-
-        modal.classList.add('active');
-        modal.setAttribute('aria-hidden', 'false');
+        return config;
     },
 
     applyLayerConfig(type, config) {
@@ -964,16 +891,23 @@ cancelModelModeModal() {
         
         try {
             geminiOptimizer.setApiKey(apiKey);
+
+            // Discover which models this key can use before testing one, so a
+            // model retired by the provider results in a different choice
+            // rather than a failed connection.
+            const available = await geminiOptimizer.listModels();
+            this.populateModelSelect(available, geminiOptimizer.getModel());
+
             const testResponse = await geminiOptimizer.makeRequest('Respond with "Connected" to confirm API is working.', 100);
-            
+
             if (testResponse && testResponse.toLowerCase().includes('connected')) {
                 state.aiOptimizerState.isConnected = true;
                 document.getElementById('status-indicator').classList.add('connected');
                 document.getElementById('status-text').textContent = 'Connected';
-                
+
                 this.updateWizardStep(2);
-                utils.notify('🎉 AI Optimizer activated successfully!', 'success');
-                localStorage.setItem('gemini_api_key', apiKey);
+                utils.notify(`AI Optimizer connected using ${geminiOptimizer.getModel()}`, 'success');
+                // key is held by geminiOptimizer for this session only
             } else {
                 throw new Error('Connection test failed');
             }
@@ -1069,10 +1003,10 @@ cancelModelModeModal() {
                     
                     <div style="padding: 20px;">
                         <div class="recommendation-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-                            <button class="rec-tab active" onclick="DeepForgeStudio.handlers.switchRecommendationTab('overview')" data-tab="overview" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600;"><i class="fas fa-chart-pie"></i> Overview</button>
-                            <button class="rec-tab" onclick="DeepForgeStudio.handlers.switchRecommendationTab('architecture')" data-tab="architecture" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600;"><i class="fas fa-project-diagram"></i> Architecture</button>
-                            <button class="rec-tab" onclick="DeepForgeStudio.handlers.switchRecommendationTab('code')" data-tab="code" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600;"><i class="fas fa-code"></i> Code</button>
-                            <button class="rec-tab" onclick="DeepForgeStudio.handlers.switchRecommendationTab('training')" data-tab="training" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600;"><i class="fas fa-graduation-cap"></i> Training</button>
+                            <button class="rec-tab active" onclick="LayernautStudio.handlers.switchRecommendationTab('overview')" data-tab="overview" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600;"><i class="fas fa-chart-pie"></i> Overview</button>
+                            <button class="rec-tab" onclick="LayernautStudio.handlers.switchRecommendationTab('architecture')" data-tab="architecture" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600;"><i class="fas fa-project-diagram"></i> Architecture</button>
+                            <button class="rec-tab" onclick="LayernautStudio.handlers.switchRecommendationTab('code')" data-tab="code" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600;"><i class="fas fa-code"></i> Code</button>
+                            <button class="rec-tab" onclick="LayernautStudio.handlers.switchRecommendationTab('training')" data-tab="training" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600;"><i class="fas fa-graduation-cap"></i> Training</button>
                         </div>
                         
                         <div class="tab-contents">
@@ -1084,9 +1018,9 @@ cancelModelModeModal() {
                     </div>
                     
                     <div style="background: rgba(40, 42, 54, 0.5); padding: 20px; text-align: center; border-top: 1px solid rgba(255,255,255,0.1);">
-                        <button class="btn btn-success btn-large" onclick="DeepForgeStudio.handlers.applyRecommendedSettings()" style="margin: 10px;"><i class="fas fa-magic"></i> Apply This Configuration</button>
-                        <button class="btn btn-info btn-large" onclick="DeepForgeStudio.handlers.exportRecommendation()" style="margin: 10px;"><i class="fas fa-download"></i> Export Report</button>
-                        <button class="btn btn-warning" onclick="DeepForgeStudio.handlers.modifyRecommendation()" style="margin: 10px;"><i class="fas fa-edit"></i> Modify Parameters</button>
+                        <button class="btn btn-success btn-large" onclick="LayernautStudio.handlers.applyRecommendedSettings()" style="margin: 10px;"><i class="fas fa-magic"></i> Apply This Configuration</button>
+                        <button class="btn btn-info btn-large" onclick="LayernautStudio.handlers.exportRecommendation()" style="margin: 10px;"><i class="fas fa-download"></i> Export Report</button>
+                        <button class="btn btn-warning" onclick="LayernautStudio.handlers.modifyRecommendation()" style="margin: 10px;"><i class="fas fa-edit"></i> Modify Parameters</button>
                     </div>
                 </div>
             </div>
@@ -1170,7 +1104,7 @@ cancelModelModeModal() {
             <div style="position: relative;">
                 <div style="background: linear-gradient(135deg, #44475a, #6272a4); padding: 10px 20px; border-radius: 15px 15px 0 0; display: flex; justify-content: space-between; align-items: center;">
                     <span style="color: #50fa7b; font-weight: 600;"><i class="fas fa-code"></i> Implementation Code</span>
-                    <button onclick="DeepForgeStudio.utils.copyToClipboard(\`${code.replace(/`/g, '\\`')}\`)" style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 5px 15px; border-radius: 5px; cursor: pointer;"><i class="fas fa-copy"></i> Copy Code</button>
+                    <button onclick="LayernautStudio.utils.copyToClipboard(\`${code.replace(/`/g, '\\`')}\`)" style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 5px 15px; border-radius: 5px; cursor: pointer;"><i class="fas fa-copy"></i> Copy Code</button>
                 </div>
                 <pre style="background: #282a36; color: #f8f8f2; padding: 20px; margin: 0; border-radius: 0 0 15px 15px; overflow-x: auto; max-height: 500px;"><code>${this.highlightPythonCode(code)}</code></pre>
             </div>
@@ -1466,11 +1400,18 @@ cancelModelModeModal() {
             : (state.model || 'model');
         const mode = this.getEffectiveModelMode();
         // Only allow safe chars
-        return `deepforge_${modelKey}_${mode}_${stamp}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+        return `layernaut_${modelKey}_${mode}_${stamp}`.replace(/[^a-zA-Z0-9._-]/g, '_');
     },
 
     downloadNotebook() {
-        const notebook = codeGenerator.generateColabNotebook();
+        let notebook;
+        try {
+            notebook = codeGenerator.generateColabNotebook();
+        } catch (err) {
+            // Never hand the user a file we know is incomplete.
+            utils.notify(err.message, 'error');
+            return;
+        }
         const blob = new Blob([notebook], { type: 'application/json' });
         const base = this.getExportBaseName();
         utils.downloadBlob(blob, `${base}.ipynb`);
@@ -1478,7 +1419,13 @@ cancelModelModeModal() {
     },
 
     downloadPython() {
-        const code = codeGenerator.generatePythonScript();
+        let code;
+        try {
+            code = codeGenerator.generatePythonScript();
+        } catch (err) {
+            utils.notify(err.message, 'error');
+            return;
+        }
         const blob = new Blob([code], { type: 'text/plain' });
         const base = this.getExportBaseName();
         utils.downloadBlob(blob, `${base}.py`);
@@ -1498,6 +1445,9 @@ cancelModelModeModal() {
             case 'colab':
                 this.downloadNotebook();
                 break;
+            case 'capsule':
+                this.downloadCapsule();
+                break;
             default:
                 utils.notify(`Export to ${format} format coming soon!`);
         }
@@ -1516,21 +1466,17 @@ cancelModelModeModal() {
         const currentModel = state.model;
         if (!currentModel) return utils.notify('Please select a model first', 'warning');
         
-        const apiKey = localStorage.getItem('gemini_api_key');
+        const apiKey = geminiOptimizer.getApiKey();
         if (!apiKey) return utils.notify('Please connect AI first (Tab 3)', 'error');
         
         window.showLoadingMessage(`🔍 Searching projects for ${currentModel}...`);
         
         try {
             const prompt = `Find 3 GitHub repositories or real-world projects that implement ${currentModel}. Return a JSON list with 'title', 'url', and 'description'.`;
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-            });
-            if (!response.ok) throw new Error('API Error');
-            const data = await response.json();
-            const text = data.candidates[0].content.parts[0].text;
+            // Routed through geminiOptimizer rather than a second hardcoded
+            // endpoint: this call previously pinned a model of its own, so it
+            // broke separately when that model was retired.
+            const text = await geminiOptimizer.makeRequest(prompt, 1000);
             window.showConnectedResults(text, currentModel);
             window.hideLoadingMessage();
         } catch (error) {
@@ -1614,7 +1560,7 @@ const renderLayerButtons = () => {
 };
 
 const loadSavedConfiguration = () => {
-    const saved = localStorage.getItem('deepforge_config');
+    const saved = localStorage.getItem('layernaut_config');
     if (!saved) return;
     try {
         const config = JSON.parse(saved);
@@ -1625,8 +1571,10 @@ const loadSavedConfiguration = () => {
 };
 
 const checkSavedApiKey = () => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) document.getElementById('geminiApiKey').value = savedKey;
+    // The key is deliberately not written back into the input field: a key
+    // sitting in the DOM is one more place for a cross-site script to read it.
+    // Any key persisted by an earlier version is removed here.
+    try { localStorage.removeItem('gemini_api_key'); } catch (_) {}
 };
 
 const setupEventListeners = () => {
@@ -1708,43 +1656,10 @@ const setupEventListeners = () => {
         }
 
         // Apply Layer Configs
-        if (e.target.closest('#applyConv2DConfigBtn')) {
-            handlers.applyLayerConfig('Conv2D', {
-                filters: document.getElementById('conv_filters').value,
-                kernel_size: document.getElementById('conv_kernel').value,
-                stride: document.getElementById('conv_stride').value,
-                padding: document.getElementById('conv_padding').value,
-                activation: document.getElementById('conv_activation').value
-            });
-        }
-        if (e.target.closest('#applyDenseConfigBtn')) {
-            handlers.applyLayerConfig('Dense', {
-                units: document.getElementById('dense_units').value,
-                activation: document.getElementById('dense_activation').value,
-                use_bias: document.getElementById('dense_bias').value
-            });
-        }
-        if (e.target.closest('#applyDropoutConfigBtn')) {
-            handlers.applyLayerConfig('Dropout', { rate: document.getElementById('dropout_rate').value });
-        }
-        if (e.target.closest('#applyMaxPoolConfigBtn')) {
-            handlers.applyLayerConfig('MaxPool', {
-                pool_size: document.getElementById('maxpool_size').value,
-                stride: document.getElementById('maxpool_stride').value,
-                padding: document.getElementById('maxpool_padding').value
-            });
-        }
-        if (e.target.closest('#applyAvgPoolConfigBtn')) {
-            handlers.applyLayerConfig('AvgPool', {
-                pool_size: document.getElementById('avgpool_size').value,
-                stride: document.getElementById('avgpool_stride').value,
-                padding: document.getElementById('avgpool_padding').value
-            });
+        if (e.target.closest('#applyLayerConfigBtn')) {
+            handlers.applyLayerConfig(state.pendingLayerType, handlers.readLayerConfig());
         }
 
-        // ============================================
-        // ML CONFIGURATION BUTTONS (Dynamic)
-        // ============================================
         if (e.target.closest('#applyMLConfigBtn')) {
             e.preventDefault(); // Prevent accidental form submission
             handlers.applyMLConfig();
@@ -1926,6 +1841,8 @@ const setupEventListeners = () => {
     document.getElementById('copyCodeBtn')?.addEventListener('click', () => handlers.copyGeneratedCode());
     document.getElementById('downloadPyBtn')?.addEventListener('click', () => handlers.downloadPython());
     document.getElementById('downloadIpynbBtn')?.addEventListener('click', () => handlers.downloadNotebook());
+    document.getElementById('geminiModel')?.addEventListener('change', () => handlers.onModelChange());
+    document.getElementById('downloadCapsuleBtn')?.addEventListener('click', () => handlers.downloadCapsule());
     document.getElementById('exportConfigBtn')?.addEventListener('click', () => handlers.exportConfig());
     document.getElementById('importConfigBtn')?.addEventListener('click', () => {
         document.getElementById('importConfigInput')?.click();
@@ -1939,7 +1856,7 @@ const setupEventListeners = () => {
     // Language selector
     document.getElementById('languageSelect')?.addEventListener('change', (e) => {
         state.language = e.target.value;
-        localStorage.setItem('deepforge_language', state.language);
+        localStorage.setItem('layernaut_language', state.language);
         applyTranslations();
     });
 

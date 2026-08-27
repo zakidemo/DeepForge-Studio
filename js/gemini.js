@@ -5,21 +5,101 @@ import { utils } from './utils.js';
 export class GeminiOptimizer {
     constructor() {
         this.apiKey = '';
-        this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+        this.apiBase = 'https://generativelanguage.googleapis.com/v1beta';
+        // The provider retires models on its own schedule: the previously
+        // hardcoded gemini-2.0-flash was shut down on 1 June 2026, which broke
+        // the feature with no change on our side. Rather than hardcode another
+        // identifier that will expire in turn, the model is configurable and
+        // the list of usable models is discovered from the provider at connect
+        // time. PREFERRED_MODELS is only an ordering hint for choosing a
+        // sensible default from whatever the account actually has access to.
+        this.PREFERRED_MODELS = [
+            'gemini-3.5-flash',
+            'gemini-3.6-flash',
+            'gemini-3.5-flash-lite',
+            'gemini-2.5-flash'
+        ];
+        this.model = '';
+        this.availableModels = [];
         this.lastRecommendations = null;
         this.responseLanguage = 'English';
     }
 
+    get baseURL() {
+        const model = this.model || this.PREFERRED_MODELS[0];
+        return `${this.apiBase}/models/${model}:generateContent`;
+    }
+
+    setModel(model) {
+        this.model = model;
+        try { sessionStorage.setItem('gemini_model', model); } catch (_) {}
+    }
+
+    getModel() {
+        if (!this.model) {
+            try { this.model = sessionStorage.getItem('gemini_model') || ''; } catch (_) {}
+        }
+        return this.model || this.PREFERRED_MODELS[0];
+    }
+
+    // Ask the provider which models this key can actually use, so a retirement
+    // on their side degrades to a different choice rather than a dead feature.
+    async listModels() {
+        const apiKey = this.getApiKey();
+        if (!apiKey) throw new Error('Please enter your Google Gemini API key first');
+
+        const response = await fetch(`${this.apiBase}/models?key=${apiKey}`);
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || `Could not list models: ${response.status}`);
+        }
+        const data = await response.json();
+        this.availableModels = (data.models || [])
+            .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+            .map(m => m.name.replace(/^models\//, ''))
+            // Exclude specialised endpoints that cannot answer a text prompt.
+            .filter(n => !/embedding|aqa|imagen|veo|tts|image|音/i.test(n));
+
+        if (!this.availableModels.length) {
+            throw new Error('This API key has no models available for text generation.');
+        }
+
+        // Keep the current choice if it is still offered; otherwise take the
+        // highest-ranked preference that is, and fall back to whatever exists.
+        const current = this.getModel();
+        if (!this.availableModels.includes(current)) {
+            const pick = this.PREFERRED_MODELS.find(m => this.availableModels.includes(m))
+                || this.availableModels.find(n => /flash/i.test(n))
+                || this.availableModels[0];
+            this.setModel(pick);
+        }
+        return this.availableModels;
+    }
+
+    // Reviewer 3, comment 3.4b: the key was written to localStorage, where it
+    // persisted indefinitely and was readable by any script running in this
+    // origin. It is now held in memory for the session only, mirrored to
+    // sessionStorage so a page reload does not lose it, and cleared when the
+    // tab closes. This narrows the window; it does not eliminate the risk, and
+    // the documentation says so.
     setApiKey(key) {
         this.apiKey = key;
-        localStorage.setItem('gemini_api_key', key);
+        try { sessionStorage.setItem('gemini_api_key', key); } catch (_) {}
+        // Remove any key persisted by an earlier version of the application.
+        try { localStorage.removeItem('gemini_api_key'); } catch (_) {}
     }
 
     getApiKey() {
         if (!this.apiKey) {
-            this.apiKey = localStorage.getItem('gemini_api_key') || '';
+            try { this.apiKey = sessionStorage.getItem('gemini_api_key') || ''; } catch (_) { this.apiKey = ''; }
         }
         return this.apiKey;
+    }
+
+    clearApiKey() {
+        this.apiKey = '';
+        try { sessionStorage.removeItem('gemini_api_key'); } catch (_) {}
+        try { localStorage.removeItem('gemini_api_key'); } catch (_) {}
     }
 
     async makeRequest(prompt, maxTokens = 2000) {
@@ -54,8 +134,14 @@ export class GeminiOptimizer {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error?.message || `API request failed: ${response.status}`);
+                const error = await response.json().catch(() => ({}));
+                const message = error.error?.message || `API request failed: ${response.status}`;
+                // A retired model is the most likely cause of a sudden failure
+                // on a key that previously worked; say so and say what to do.
+                if (/no longer available|not found|deprecated|shut down/i.test(message)) {
+                    throw new Error(`The model \"${this.getModel()}\" is no longer available from the provider. Reconnect to refresh the model list and choose a current model. (Provider message: ${message})`);
+                }
+                throw new Error(message);
             }
 
             const data = await response.json();

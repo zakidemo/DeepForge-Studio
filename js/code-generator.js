@@ -1,9 +1,20 @@
 import { state } from './state.js';
 import { models } from './config/models.js';
+import { mlConfigurations, mlTask } from './config/ml-config.js';
+import { modalityOf, inputShapeExpr, inputShapeNumeric, buildCustomGraph, headCode, checkInputSize, MODALITIES } from './architecture.js';
+import { ARCHITECTURES } from './config/architectures.js';
 
 export const codeGenerator = {
     generateCode() {
-        const code = this.generateModelCode();
+        let code;
+        try {
+            code = this.generateModelCode();
+        } catch (err) {
+            // The preview is refreshed on almost every UI event, so a generation
+            // error must be shown rather than thrown: an uncaught error here
+            // would leave the previous (wrong) code on screen.
+            code = `# Code generation stopped\n# ${err.message}`;
+        }
         const el = document.getElementById('modelCode');
         if (el) {
             el.textContent = code;
@@ -24,7 +35,7 @@ export const codeGenerator = {
         }
 
         if (state.model && models[state.model]?.type === 'ml') {
-            return this.generateMLCode(state.model, numClasses);
+            return this.generateMLCode(state.model);
         }
 
 
@@ -32,7 +43,7 @@ export const codeGenerator = {
         if (
             state.modelMode === 'scratch' &&
             state.model &&
-            ['vgg16', 'resnet50', 'mobilenet', 'efficientnet', 'inceptionv3', 'densenet'].includes(state.model) &&
+            ['resnet50', 'mobilenet', 'efficientnet', 'inceptionv3', 'densenet'].includes(state.model) &&
             state.currentMode !== 'custom'
         ) {
             return this.generateApplicationScratchCode(state.model, numClasses);
@@ -49,205 +60,64 @@ export const codeGenerator = {
         return this.generateDLCode(numClasses);
     },
 
+    // Emits the model using the Keras functional API. Sequential could not
+    // express residual connections, parallel branches, or multi-input layers,
+    // which ruled out ResNet-style blocks, U-Net and Transformer alike.
     generateDLCode(numClasses) {
-        let code = `import tensorflow as tf\nfrom tensorflow.keras import layers, models\n\n# Model architecture\nmodel = models.Sequential([\n`;
-
-        if (state.currentMode === 'custom' && state.customLayers.length > 0) {
-            let hasInput = false;
-            state.customLayers.forEach((layer, index) => {
-                const config = state.customLayerConfigs[index] || {};
-                
-                switch(layer) {
-                    case 'Conv2D':
-                        if (!hasInput) {
-                            code += `    layers.Conv2D(${config.filters || 32}, (${config.kernel_size || 3}, ${config.kernel_size || 3}), strides=${config.stride || 1}, padding='${config.padding || 'valid'}', activation='${config.activation || 'relu'}', input_shape=(224, 224, 3)),\n`;
-                            hasInput = true;
-                        } else {
-                            code += `    layers.Conv2D(${config.filters || 32}, (${config.kernel_size || 3}, ${config.kernel_size || 3}), strides=${config.stride || 1}, padding='${config.padding || 'valid'}', activation='${config.activation || 'relu'}'),\n`;
-                        }
-                        break;
-                    case 'Dense':
-                        code += `    layers.Dense(${config.units || 128}, activation='${config.activation || 'relu'}'),\n`;
-                        break;
-                    case 'MaxPool':
-                        code += `    layers.MaxPooling2D((${config.pool_size || 2}, ${config.pool_size || 2}), strides=${config.stride || 2}, padding='${config.padding || 'valid'}'),\n`;
-                        break;
-                    case 'AvgPool':
-                        code += `    layers.AveragePooling2D((${config.pool_size || 2}, ${config.pool_size || 2}), strides=${config.stride || 2}, padding='${config.padding || 'valid'}'),\n`;
-                        break;
-                    case 'Dropout':
-                        code += `    layers.Dropout(${config.rate || 0.5}),\n`;
-                        break;
-                    case 'Flatten':
-                        code += `    layers.Flatten(),\n`;
-                        break;
-                    case 'LSTM':
-                        if(!hasInput) { code += `    layers.LSTM(128, input_shape=(100, 1)),\n`; hasInput=true; } else { code += `    layers.LSTM(64),\n`; }
-                        break;
-                    case 'GRU':
-                         if(!hasInput) { code += `    layers.GRU(64, input_shape=(100, 1)),\n`; hasInput=true; } else { code += `    layers.GRU(32),\n`; }
-                        break;
-                }
-            });
-        } else if (state.model) {
-            code += this.getModelArchitecture(state.model);
+        const inputSize = this.imageInputSize();
+        const modality = this.currentModality();
+        if (state.currentMode !== 'custom' && state.model) {
+            const problem = checkInputSize(state.model, inputSize);
+            if (problem) throw new Error(problem);
         }
-        
-        code += `    layers.Dense(${numClasses}, activation='softmax')\n])\n\n# Summary\nmodel.summary()\n`;
+        const isCustom = state.currentMode === 'custom';
+
+        let bodyCode, outputShape;
+        if (isCustom) {
+            const graph = buildCustomGraph(state.customLayers, state.customLayerConfigs, modality, inputSize);
+            bodyCode = graph.code;
+            outputShape = graph.outputShape;
+        } else {
+            const template = ARCHITECTURES[state.model];
+            if (!template) {
+                throw new Error(`No architecture template for "${state.model}". Please report this as a bug.`);
+            }
+            bodyCode = template();
+            outputShape = null;
+        }
+
+        const head = headCode(modality, numClasses, outputShape);
+        const shapeExpr = inputShapeExpr(modality, inputSize);
+
+        let code = `import tensorflow as tf\nfrom tensorflow.keras import layers, models\n\n`;
+        if (modality !== 'image' && modality !== 'segmentation') {
+            code += `# Shapes marked in CAPITALS are defined by the data section of the\n`;
+            code += `# exported script, so this model adapts to your dataset.\n`;
+        }
+        code += `inputs = layers.Input(shape=${shapeExpr})\nx = inputs\n\n`;
+        code += bodyCode.trimEnd() + `\n\n`;
+        if (head.note) code += `# ${head.note}\n`;
+        code += head.code + `\n`;
+        code += `model = models.Model(inputs, outputs, name='${isCustom ? 'custom_model' : state.model}')\n\n`;
+        code += `# Summary\nmodel.summary()\n`;
         code += `\n# NOTE: Compilation and training steps are included in the exported training pipeline.\n`;
         return code;
     },
 
-    getModelArchitecture(modelName) {
-        // ... (Paste the architectures object from original script here) ...
-        const architectures = {
-             'vgg16': `    # VGG16 Architecture
-    layers.Conv2D(64, (3,3), activation='relu', padding='same', input_shape=(224,224,3)),
-    layers.Conv2D(64, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((2,2), strides=2),
-    
-    layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((2,2), strides=2),
-    
-    layers.Conv2D(256, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(256, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(256, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((2,2), strides=2),
-    
-    layers.Conv2D(512, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(512, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(512, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((2,2), strides=2),
-    
-    layers.Conv2D(512, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(512, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(512, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((2,2), strides=2),
-    
-    layers.Flatten(),
-    layers.Dense(4096, activation='relu'),
-    layers.Dropout(0.5),
-    layers.Dense(4096, activation='relu'),
-    layers.Dropout(0.5),\n`,
-                        'alexnet': `    # AlexNet Architecture
-    layers.Conv2D(96, (11,11), strides=4, activation='relu', input_shape=(224,224,3)),
-    layers.MaxPooling2D((3,3), strides=2),
-    layers.Conv2D(256, (5,5), activation='relu', padding='same'),
-    layers.MaxPooling2D((3,3), strides=2),
-    layers.Conv2D(384, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(384, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(256, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((3,3), strides=2),
-    layers.Flatten(),
-    layers.Dense(4096, activation='relu'),
-    layers.Dropout(0.5),
-    layers.Dense(4096, activation='relu'),
-    layers.Dropout(0.5),\n`,
-                        'lstm': `    # LSTM Architecture for Sequences
-    layers.LSTM(128, return_sequences=True, input_shape=(100, 1)),
-    layers.Dropout(0.2),
-    layers.LSTM(128, return_sequences=True),
-    layers.Dropout(0.2),
-    layers.LSTM(64),
-    layers.Dropout(0.2),
-    layers.Dense(32, activation='relu'),\n`,
-                        'gru': `    # GRU Architecture for Sequences
-    layers.GRU(128, return_sequences=True, input_shape=(100, 1)),
-    layers.Dropout(0.2),
-    layers.GRU(64, return_sequences=True),
-    layers.Dropout(0.2),
-    layers.GRU(32),
-    layers.Dropout(0.2),
-    layers.Dense(16, activation='relu'),\n`,
-                        'simple_cnn': `    # Simple CNN Architecture
-    layers.Conv2D(32, (3,3), activation='relu', input_shape=(224,224,3)),
-    layers.MaxPooling2D((2,2)),
-    layers.Conv2D(64, (3,3), activation='relu'),
-    layers.MaxPooling2D((2,2)),
-    layers.Conv2D(128, (3,3), activation='relu'),
-    layers.MaxPooling2D((2,2)),
-    layers.Flatten(),
-    layers.Dense(256, activation='relu'),
-    layers.Dropout(0.5),
-    layers.Dense(128, activation='relu'),
-    layers.Dropout(0.5),\n`,
-
-    'unet': `    # U-Net Architecture for Segmentation
-    # Encoder
-    layers.Conv2D(64, (3,3), activation='relu', padding='same', input_shape=(256,256,3)),
-    layers.Conv2D(64, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((2,2)),
-    
-    layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((2,2)),
-    
-    layers.Conv2D(256, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(256, (3,3), activation='relu', padding='same'),
-    layers.MaxPooling2D((2,2)),
-    
-    # Bridge
-    layers.Conv2D(512, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(512, (3,3), activation='relu', padding='same'),
-    
-    # Decoder
-    layers.Conv2DTranspose(256, (2,2), strides=2, padding='same'),
-    layers.Conv2D(256, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(256, (3,3), activation='relu', padding='same'),
-    
-    layers.Conv2DTranspose(128, (2,2), strides=2, padding='same'),
-    layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    
-    layers.Conv2DTranspose(64, (2,2), strides=2, padding='same'),
-    layers.Conv2D(64, (3,3), activation='relu', padding='same'),
-    layers.Conv2D(64, (3,3), activation='relu', padding='same'),\n`,
-
-    'autoencoder': `    # Autoencoder Architecture
-    # Encoder
-    layers.Dense(512, activation='relu', input_shape=(784,)),
-    layers.Dense(256, activation='relu'),
-    layers.Dense(128, activation='relu'),
-    layers.Dense(64, activation='relu'),
-    
-    # Latent space
-    layers.Dense(32, activation='relu', name='latent_space'),
-    
-    # Decoder
-    layers.Dense(64, activation='relu'),
-    layers.Dense(128, activation='relu'),
-    layers.Dense(256, activation='relu'),
-    layers.Dense(512, activation='relu'),
-    layers.Dense(784, activation='sigmoid'),\n`,
-
-    'transformer': `    # Simplified Transformer Architecture
-    # Input embedding
-    layers.Input(shape=(100,)),
-    layers.Embedding(input_dim=10000, output_dim=512),
-    
-    # Positional encoding would go here (custom implementation needed)
-    
-    # Multi-head attention blocks (simplified)
-    layers.MultiHeadAttention(num_heads=8, key_dim=64),
-    layers.Dropout(0.1),
-    layers.LayerNormalization(epsilon=1e-6),
-    
-    # Feed forward network
-    layers.Dense(2048, activation='relu'),
-    layers.Dense(512),
-    layers.Dropout(0.1),
-    layers.LayerNormalization(epsilon=1e-6),
-    
-    # Output layers
-    layers.GlobalAveragePooling1D(),
-    layers.Dense(256, activation='relu'),
-    layers.Dropout(0.5),\n`
-        };
-        return architectures[modelName] || '';
+    currentModality() {
+        return modalityOf(state.model, state.customLayers, state.currentMode);
     },
 
-    
+    // Single source of truth for the image input size. The model definition and
+    // the data pipeline previously read it from different places, so any value
+    // other than the default produced a model and a dataset that disagreed.
+    imageInputSize() {
+        if (state.model === 'inceptionv3') {
+            return Math.max(75, parseInt(document.getElementById('inputSize')?.value || '299', 10));
+        }
+        return parseInt(document.getElementById('inputSize')?.value || '224', 10);
+    },
+
     generateApplicationScratchCode(modelType, numClasses) {
         const appMap = {
             'vgg16': 'VGG16',
@@ -258,17 +128,10 @@ export const codeGenerator = {
             'densenet': 'DenseNet121'
         };
 
-        const inputSizeMap = {
-            'inceptionv3': 299
-        };
-
         const appClass = appMap[modelType];
-        const inputSize = inputSizeMap[modelType] || 224;
-
-        // Special case: export fully expanded VGG16 blocks (layer-by-layer) for educational transparency
-        if (modelType === 'vgg16') {
-            return this.generateVGG16ScratchExpanded(numClasses, inputSize);
-        }
+        const inputSize = this.imageInputSize();
+        const problem = checkInputSize(modelType, inputSize);
+        if (problem) throw new Error(problem);
 
         let code = `import tensorflow as tf\nfrom tensorflow.keras import layers, models\n\n`;
         code += `# ${appClass} (from scratch: weights=None)\n`;
@@ -291,63 +154,11 @@ export const codeGenerator = {
         return code;
     },
 
-    generateVGG16ScratchExpanded(numClasses, inputSize = 224) {
-        // Fully expanded VGG16 backbone (conv/pool blocks) for transparent exports.
-        // Head is kept lightweight by default (GAP + Dropout + Dense) to suit many tasks.
-        let code = `import tensorflow as tf\nfrom tensorflow.keras import layers, models\n\n`;
-        code += `# VGG16 (from scratch, expanded layer-by-layer)\n`;
-        code += `inputs = layers.Input(shape=(${inputSize}, ${inputSize}, 3))\n`;
-        code += `x = inputs\n\n`;
-
-        // Block 1
-        code += `# Block 1\n`;
-        code += `x = layers.Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1')(x)\n`;
-        code += `x = layers.Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2')(x)\n`;
-        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool')(x)\n\n`;
-
-        // Block 2
-        code += `# Block 2\n`;
-        code += `x = layers.Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1')(x)\n`;
-        code += `x = layers.Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2')(x)\n`;
-        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool')(x)\n\n`;
-
-        // Block 3
-        code += `# Block 3\n`;
-        code += `x = layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1')(x)\n`;
-        code += `x = layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2')(x)\n`;
-        code += `x = layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3')(x)\n`;
-        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(x)\n\n`;
-
-        // Block 4
-        code += `# Block 4\n`;
-        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1')(x)\n`;
-        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2')(x)\n`;
-        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3')(x)\n`;
-        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool')(x)\n\n`;
-
-        // Block 5
-        code += `# Block 5\n`;
-        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1')(x)\n`;
-        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2')(x)\n`;
-        code += `x = layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3')(x)\n`;
-        code += `x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')(x)\n\n`;
-
-        // Head
-        code += `# Classification head\n`;
-        code += `x = layers.GlobalAveragePooling2D()(x)\n`;
-        code += `x = layers.Dropout(0.2)(x)\n`;
-        code += `outputs = layers.Dense(${numClasses}, activation='softmax', name='predictions')(x)\n`;
-        code += `model = models.Model(inputs, outputs, name='vgg16_from_scratch')\n\n`;
-
-        code += `# Summary\nmodel.summary()\n`;
-        code += `\n# NOTE: Compilation and training steps are included in the exported training pipeline.\n`;
-
-        return code;
-    },
-
 generatePretrainedCode(modelType, numClasses) {
                         const freezeLayers = document.getElementById('freezeLayers')?.value || 'base';
-                    const inputSize = document.getElementById('inputSize')?.value || '224';
+                    const inputSize = this.imageInputSize();
+                    const sizeProblem = checkInputSize(modelType, inputSize);
+                    if (sizeProblem) throw new Error(sizeProblem);
                     const customTop = document.getElementById('customTop')?.value || 'default';
                     
                     let code = `import tensorflow as tf
@@ -382,7 +193,9 @@ base_model = ${appMap[modelType]}(
     weights='imagenet'
 )\n\n`;
                     
-                    // Handle freezing
+                    // Handle freezing. Every option offered in the interface must
+                    // appear here: 'all_but_last' was previously absent, so selecting
+                    // it silently produced a fully trainable backbone.
                     if (freezeLayers === 'base') {
                         code += `# Freeze the base model layers
 base_model.trainable = False\n\n`;
@@ -390,6 +203,25 @@ base_model.trainable = False\n\n`;
                         code += `# Freeze first 50% of layers
 for layer in base_model.layers[:len(base_model.layers)//2]:
     layer.trainable = False\n\n`;
+                    } else if (freezeLayers === 'all_but_last') {
+                        code += `# Freeze every layer of the backbone except the last one that has
+# trainable weights. Taking layers[:-1] literally would be a no-op for
+# most backbones, whose final layer is a pooling layer with no weights.
+_weighted = [i for i, l in enumerate(base_model.layers) if l.weights]
+for layer in base_model.layers[:_weighted[-1]]:
+    layer.trainable = False
+print(f"Unfrozen backbone layer: {base_model.layers[_weighted[-1]].name}")\n\n`;
+                    } else if (freezeLayers === 'none') {
+                        // Training a pretrained backbone end to end at a head-sized
+                        // learning rate destroys the features that make it useful.
+                        // Say so in the export rather than letting it fail silently.
+                        code += `# NOTE: no layers are frozen, so the pretrained backbone will be
+# fine-tuned end to end. Pretrained weights are easily destroyed at a
+# learning rate chosen for a randomly initialised head. If this is
+# intentional, use a much smaller learning rate (of the order of 1e-5);
+# otherwise select "Freeze base model" in the interface.\n\n`;
+                    } else {
+                        throw new Error(`Freezing option "${freezeLayers}" is offered in the interface but has no implementation. Please report this as a bug.`);
                     }
                     
                     code += `# Create the complete model
@@ -433,105 +265,243 @@ model.summary()`;
                     return code;
     },
 
-    generateMLCode(modelType, numClasses) {
+    // -------------------------------------------------
+    // CLASSICAL ML
+    // -------------------------------------------------
+    // One builder per model exposed in js/config/models.js. Adding a model to
+    // that file without adding a builder here is a defect; mlBuildersCoverModels()
+    // below is asserted by the test harness so the two cannot drift apart again.
+    mlBuilders: {
+        knn(p, scale) {
+            return {
+                imports: ['from sklearn.neighbors import KNeighborsClassifier'],
+                estimator: `KNeighborsClassifier(
+    n_neighbors=${p.n_neighbors || 5},
+    weights='${p.weights || 'uniform'}',
+    algorithm='${p.algorithm || 'auto'}',
+    metric='${p.metric || 'euclidean'}',
+    n_jobs=-1
+)`,
+                scaler: scale ? 'standard' : null
+            };
+        },
+        svm(p, scale, seed) {
+            return {
+                imports: ['from sklearn.svm import SVC'],
+                estimator: `SVC(
+    kernel='${p.kernel || 'rbf'}',
+    C=${p.C || 1.0},
+    gamma=${(g => (g === 'scale' || g === 'auto') ? `'${g}'` : g)(p.gamma || 'scale')},
+    probability=${p.probability === false ? 'False' : 'True'},
+    random_state=${seed}
+)`,
+                scaler: scale ? 'standard' : null
+            };
+        },
+        randomforest(p, scale, seed) {
+            return {
+                imports: ['from sklearn.ensemble import RandomForestClassifier'],
+                estimator: `RandomForestClassifier(
+    n_estimators=${p.n_estimators || 100},
+    max_depth=${p.max_depth || 'None'},
+    min_samples_split=${p.min_samples_split || 2},
+    random_state=${seed},
+    n_jobs=-1
+)`,
+                // Tree ensembles are scale-invariant; scaling is deliberately skipped.
+                scaler: null
+            };
+        },
+        decisiontree(p, scale, seed) {
+            return {
+                imports: ['from sklearn.tree import DecisionTreeClassifier'],
+                estimator: `DecisionTreeClassifier(
+    criterion='${p.criterion || 'gini'}',
+    max_depth=${p.max_depth || 'None'},
+    min_samples_split=${p.min_samples_split || 2},
+    min_samples_leaf=${p.min_samples_leaf || 1},
+    random_state=${seed}
+)`,
+                scaler: null
+            };
+        },
+        xgboost(p, scale, seed) {
+            return {
+                note: '# Requires the xgboost package:  pip install xgboost',
+                imports: ['from xgboost import XGBClassifier'],
+                estimator: `XGBClassifier(
+    n_estimators=${p.n_estimators || 100},
+    max_depth=${p.max_depth || 6},
+    learning_rate=${p.learning_rate || 0.3},
+    subsample=${p.subsample || 1.0},
+    random_state=${seed},
+    eval_metric='mlogloss',
+    n_jobs=-1
+)`,
+                scaler: null
+            };
+        },
+        naivebayes(p, scale) {
+            const variant = p.variant || 'gaussian';
+            const cls = { gaussian: 'GaussianNB', multinomial: 'MultinomialNB', bernoulli: 'BernoulliNB' }[variant];
+            const args = variant === 'gaussian' ? '' : `alpha=${p.alpha || 1.0}`;
+            return {
+                imports: [`from sklearn.naive_bayes import ${cls}`],
+                estimator: `${cls}(${args})`,
+                // MultinomialNB requires non-negative features, so standardisation
+                // would break it; min-max keeps the data in [0, 1].
+                scaler: scale ? (variant === 'gaussian' ? 'standard' : 'minmax') : null
+            };
+        },
+        logisticregression(p, scale, seed) {
+            const penalty = p.penalty === 'none' ? 'None' : `'${p.penalty || 'l2'}'`;
+            let solver = p.solver || 'lbfgs';
+            // lbfgs does not support the l1 penalty; saga does and, unlike
+            // liblinear, also handles more than two classes.
+            if (p.penalty === 'l1' && solver !== 'saga') solver = 'saga';
+            return {
+                imports: ['from sklearn.linear_model import LogisticRegression'],
+                estimator: `LogisticRegression(
+    C=${p.C || 1.0},
+    penalty=${penalty},
+    solver='${solver}',
+    max_iter=${p.max_iter || 1000},
+    random_state=${seed}
+)`,
+                scaler: scale ? 'standard' : null
+            };
+        },
+        linearregression(p, scale) {
+            return {
+                imports: ['from sklearn.linear_model import LinearRegression'],
+                estimator: `LinearRegression(
+    fit_intercept=${p.fit_intercept === false ? 'False' : 'True'},
+    positive=${p.positive === true ? 'True' : 'False'}
+)`,
+                scaler: scale ? 'standard' : null
+            };
+        },
+        kmeans(p, scale, seed) {
+            return {
+                imports: ['from sklearn.cluster import KMeans'],
+                estimator: `KMeans(
+    # clamped: cannot form more clusters than there are samples
+    n_clusters=min(${p.n_clusters || 3}, len(X)),
+    init='${p.init || 'k-means++'}',
+    n_init=${p.n_init || 10},
+    max_iter=${p.max_iter || 300},
+    random_state=${seed}
+)`,
+                scaler: scale ? 'standard' : null
+            };
+        },
+        pca(p, scale) {
+            return {
+                imports: ['from sklearn.decomposition import PCA'],
+                estimator: `PCA(
+    # clamped: n_components cannot exceed the number of input features
+    n_components=min(${p.n_components || 2}, X.shape[1]),
+    svd_solver='${p.svd_solver || 'auto'}',
+    whiten=${p.whiten === true ? 'True' : 'False'}
+)`,
+                scaler: scale ? 'standard' : null
+            };
+        }
+    },
+
+    generateMLCode(modelType) {
+        const build = this.mlBuilders[modelType];
+        if (!build) {
+            // Reaching here means models.js offers something mlBuilders does not
+            // implement. Fail loudly rather than emitting a placeholder comment.
+            throw new Error(`No code generator for the model "${modelType}". Please report this as a bug.`);
+        }
+
         const mlConfig = state.mlConfig || {};
         const params = mlConfig.params || {};
-        const preprocessing = mlConfig.preprocessing || { scaleFeatures: true, testSize: 0.2, randomState: 42 };
+        const preprocessing = mlConfig.preprocessing || {};
+        const seed = parseInt(preprocessing.randomState ?? 42, 10);
+        const scale = preprocessing.scaleFeatures !== false;
+        const task = mlTask(modelType);
 
-        const useScaling = preprocessing.scaleFeatures !== false;
+        const spec = build(params, scale, seed);
+        const scalerImport = spec.scaler === 'minmax'
+            ? 'from sklearn.preprocessing import MinMaxScaler'
+            : 'from sklearn.preprocessing import StandardScaler';
+        const scalerCall = spec.scaler === 'minmax' ? 'MinMaxScaler()' : 'StandardScaler()';
 
-        if (modelType === 'knn') {
-            return `from sklearn.neighbors import KNeighborsClassifier
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, classification_report
+        const metricImports = {
+            classification: 'from sklearn.metrics import accuracy_score, classification_report, confusion_matrix',
+            regression: 'from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error',
+            clustering: 'from sklearn.metrics import silhouette_score',
+            decomposition: null
+        }[task];
 
-# K-Nearest Neighbors (KNN)
-knn = KNeighborsClassifier(
-    n_neighbors=${params.n_neighbors || 5},
-    weights='${params.weights || 'uniform'}',
-    algorithm='${params.algorithm || 'auto'}',
-    metric='${params.metric || 'euclidean'}',
-    n_jobs=-1
-)
+        const imports = [...spec.imports];
+        if (spec.scaler) imports.push('from sklearn.pipeline import Pipeline', scalerImport);
+        if (metricImports) imports.push(metricImports);
+        if (task === 'decomposition') imports.push('import numpy as np');
 
-${useScaling ? `pipeline = Pipeline([("scaler", StandardScaler()), ("knn", knn)])` : `pipeline = knn`}
+        let code = '';
+        if (spec.note) code += `${spec.note}\n`;
+        code += imports.join('\n') + '\n\n';
+        code += `# ${mlConfigurations[modelType]?.name || modelType}\nestimator = ${spec.estimator}\n\n`;
+        code += spec.scaler
+            ? `model = Pipeline([("scaler", ${scalerCall}), ("estimator", estimator)])\n\n`
+            : `model = estimator\n\n`;
 
-# Train
-pipeline.fit(X_train, y_train)
-
-# Predict
-y_pred = pipeline.predict(X_test)
-
-# Evaluate
-accuracy = accuracy_score(y_test, y_pred)
-print(f"Accuracy: {accuracy:.4f}")
-print("\\nClassification Report:")
-print(classification_report(y_test, y_pred))`;
-        }
-
-        if (modelType === 'svm') {
-            return `from sklearn import svm
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, classification_report
-
-# Support Vector Machine (SVM)
-svc = svm.SVC(
-    kernel='${params.kernel || 'rbf'}',
-    C=${params.C || 1.0},
-    gamma='${params.gamma || 'scale'}',
-    probability=${params.probability === false ? 'False' : 'True'},
-    random_state=${preprocessing.randomState || 42}
-)
-
-${useScaling ? `pipeline = Pipeline([("scaler", StandardScaler()), ("svm", svc)])` : `pipeline = svc`}
-
-# Train
-pipeline.fit(X_train, y_train)
-
-# Predict
-y_pred = pipeline.predict(X_test)
-
-# Evaluate
-accuracy = accuracy_score(y_test, y_pred)
-print(f"Accuracy: {accuracy:.4f}")
-print("\\nClassification Report:")
-print(classification_report(y_test, y_pred))`;
-        }
-
-        if (modelType === 'randomforest') {
-            return `from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report
-
-# Random Forest
-model = RandomForestClassifier(
-    n_estimators=${params.n_estimators || 100},
-    max_depth=${params.max_depth || 'None'},
-    min_samples_split=${params.min_samples_split || 2},
-    min_samples_leaf=${params.min_samples_leaf || 1},
-    max_features='${params.max_features || 'sqrt'}',
-    bootstrap=True,
-    random_state=${preprocessing.randomState || 42},
-    n_jobs=-1
-)
-
-# Train
+        if (task === 'classification') {
+            code += `# Train
 model.fit(X_train, y_train)
 
 # Predict
 y_pred = model.predict(X_test)
 
 # Evaluate
-accuracy = accuracy_score(y_test, y_pred)
-print(f"Accuracy: {accuracy:.4f}")
-print("\\nClassification Report:")
-print(classification_report(y_test, y_pred))`;
+print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
+print("\\nClassification report:")
+print(classification_report(y_test, y_pred))
+print("Confusion matrix:")
+print(confusion_matrix(y_test, y_pred))`;
+        } else if (task === 'regression') {
+            code += `# Train
+model.fit(X_train, y_train)
+
+# Predict
+y_pred = model.predict(X_test)
+
+# Evaluate
+rmse = mean_squared_error(y_test, y_pred) ** 0.5
+print(f"R2:   {r2_score(y_test, y_pred):.4f}")
+print(f"MAE:  {mean_absolute_error(y_test, y_pred):.4f}")
+print(f"RMSE: {rmse:.4f}")`;
+        } else if (task === 'clustering') {
+            code += `# Fit (unsupervised: no labels are used)
+labels = model.fit_predict(X)
+
+# Evaluate
+inertia = model[-1].inertia_ if hasattr(model, "__getitem__") else model.inertia_
+print(f"Inertia: {inertia:.4f}")
+if len(set(labels)) > 1:
+    print(f"Silhouette score: {silhouette_score(X, labels):.4f}")
+else:
+    print("Silhouette score undefined: all samples fell into one cluster.")`;
+        } else {
+            code += `# Fit and transform (unsupervised: no labels are used)
+X_reduced = model.fit_transform(X)
+
+# Evaluate
+pca_step = model[-1] if hasattr(model, "__getitem__") else model
+ratios = pca_step.explained_variance_ratio_
+print(f"Reduced shape: {X_reduced.shape}")
+for i, r in enumerate(ratios):
+    print(f"  PC{i + 1}: {r:.4f} of variance")
+print(f"Total variance retained: {np.sum(ratios):.4f}")`;
         }
 
-        return '# Unsupported ML model type';
+        return code;
     },
-    
+
     generatePythonScript() {
         const numClasses = parseInt(document.getElementById('numClasses')?.value || '10', 10);
         const epochs = parseInt(document.getElementById('epochs')?.value || '10', 10);
@@ -543,7 +513,7 @@ print(classification_report(y_test, y_pred))`;
         const modelCode = this.generateModelCode();
         const isML = state.currentMode !== 'custom' && state.model && models[state.model]?.type === 'ml';
 
-        const header = `# DeepForge Studio - Exported Training Pipeline
+        const header = `# Layernaut Studio - Exported Training Pipeline
 # Generated: ${new Date().toISOString()}
 
 `;
@@ -577,20 +547,68 @@ set_seed(42)
 `;
 
 
+
+const envLockBlock = `
+# ============================
+# ENVIRONMENT RECORD
+# ============================
+# Seeding constrains but does not eliminate variation (see ENVIRONMENT.md), so
+# the run records the environment it actually executed in.
+def _write_environment_lock(path="environment_lock.txt"):
+    import platform, sys
+    lines = [f"python: {sys.version.split()[0]} ({platform.platform()})"]
+    from importlib.metadata import version, PackageNotFoundError
+    # A distribution may be installed under any of several names
+    # (tensorflow / tensorflow-cpu / tensorflow-macos), so try each, then fall
+    # back to the imported module's own __version__.
+    for module, dists in (("tensorflow", ("tensorflow", "tensorflow-cpu", "tensorflow-macos", "tensorflow-gpu")),
+                          ("numpy", ("numpy",)),
+                          ("sklearn", ("scikit-learn",)),
+                          ("xgboost", ("xgboost",))):
+        found = None
+        for dist in dists:
+            try:
+                found = version(dist)
+                break
+            except PackageNotFoundError:
+                continue
+        if found is None:
+            try:
+                found = __import__(module).__version__
+            except Exception:
+                found = "not installed"
+        lines.append(f"{module}: {found}")
+    try:
+        import tensorflow as _tf
+        lines.append(f"devices: {[d.name for d in _tf.config.list_physical_devices()]}")
+    except Exception:
+        pass
+    with open(path, "w") as fh:
+        fh.write("\\n".join(lines) + "\\n")
+    print("Environment recorded in", path)
+
+_write_environment_lock()
+
+`;
                 if (isML) {
+                    const task = mlTask(state.model);
                     const mlTestSize = parseFloat(state.mlConfig?.preprocessing?.testSize ?? 0.2);
                     const mlSeed = parseInt(state.mlConfig?.preprocessing?.randomState ?? 42, 10);
+                    const supervised = (task === 'classification' || task === 'regression');
 
-                    return header + seedBlockML + `
+                    // Unsupervised models (K-Means, PCA) have no labels, so a
+                    // train/test split and accuracy metrics do not apply to them.
+                    const dataBlock = supervised
+                        ? `
 # ============================
 # DATA LOADING (EDIT THIS)
 # ============================
-# Provide X (features) and y (labels) as numpy arrays.
+# Provide X (features) and y (${task === 'regression' ? 'targets' : 'labels'}) as numpy arrays.
 # Example:
 #   import pandas as pd
 #   df = pd.read_csv("your_data.csv")
-#   X = df.drop("label", axis=1).values
-#   y = df["label"].values
+#   X = df.drop("${task === 'regression' ? 'target' : 'label'}", axis=1).values
+#   y = df["${task === 'regression' ? 'target' : 'label'}"].values
 #
 # X = ...
 # y = ...
@@ -610,20 +628,37 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=${mlSeed}
 )
 
-` + modelCode + `
+`
+                        : `
+# ============================
+# DATA LOADING (EDIT THIS)
+# ============================
+# ${task === 'clustering' ? 'Clustering' : 'Dimensionality reduction'} is unsupervised:
+# provide X (features) only. No labels and no train/test split are required.
+# Example:
+#   import pandas as pd
+#   df = pd.read_csv("your_data.csv")
+#   X = df.values
+#
+# X = ...
+
+# Guard: ensure X is defined before proceeding
+try:
+    X
+except NameError as e:
+    raise NameError("Please define X before running. See the DATA LOADING section.") from e
+
+`;
+
+                    return header + seedBlockML + envLockBlock + dataBlock + modelCode + `
 
 print("Done.")
 `;                }
 
         // DL / Pretrained
-        
-        let inputSize = 224;
-                if (state.modelMode === 'pretrained') {
-                    inputSize = parseInt(document.getElementById('inputSize')?.value || '224', 10);
-                } else if (state.model && state.currentMode !== 'custom') {
-                    // Match default input sizes used by Keras Applications when training from scratch
-                    if (state.model === 'inceptionv3') inputSize = 299;
-                }
+        const modality = (state.modelMode === 'pretrained') ? 'image' : this.currentModality();
+
+        const inputSize = this.imageInputSize();
 
         const labelMode = (lossFunction.includes('sparse')) ? 'int' : 'categorical';
 
@@ -634,58 +669,215 @@ print("Done.")
             return `tf.keras.optimizers.Adam(learning_rate=${lr})`;
         })();
 
-        return header + seedBlockDL + modelCode + `
-
+        // v1.0.x emitted an image-folder pipeline for every architecture, so the
+        // sequence, reconstruction and segmentation models generated code that
+        // constructed and then failed at fit(). Each modality now gets the data
+        // section it actually needs, and the section precedes the model so the
+        // model can be defined in terms of the data's real shape.
+        const dataSections = {
+            image: `# ============================
+# DATA (EDIT DATA_DIR)
 # ============================
-# TRAINING PIPELINE (EDIT DATA PATH)
-# ============================
-import tensorflow as tf
-
 # Expected folder structure:
-# DATA_DIR/
-#   class_a/
-#   class_b/
-#   ...
+#   DATA_DIR/class_a/... , DATA_DIR/class_b/... , ...
 DATA_DIR = "path/to/your/image_dataset"
 IMG_SIZE = (${inputSize}, ${inputSize})
 BATCH_SIZE = ${batchSize}
 EPOCHS = ${epochs}
 
 train_ds = tf.keras.utils.image_dataset_from_directory(
-    DATA_DIR,
-    validation_split=0.2,
-    subset="training",
-    seed=42,
-    image_size=IMG_SIZE,
-    batch_size=BATCH_SIZE,
-    label_mode="${labelMode}",
+    DATA_DIR, validation_split=0.2, subset="training", seed=42,
+    image_size=IMG_SIZE, batch_size=BATCH_SIZE, label_mode="${labelMode}",
+)
+val_ds = tf.keras.utils.image_dataset_from_directory(
+    DATA_DIR, validation_split=0.2, subset="validation", seed=42,
+    image_size=IMG_SIZE, batch_size=BATCH_SIZE, label_mode="${labelMode}",
 )
 
-val_ds = tf.keras.utils.image_dataset_from_directory(
-    DATA_DIR,
-    validation_split=0.2,
-    subset="validation",
-    seed=42,
-    image_size=IMG_SIZE,
-    batch_size=BATCH_SIZE,
-    label_mode="${labelMode}",
-)
+# The classification head is built for the class count set in the interface.
+# The tool cannot see your dataset, so the check happens here, where the data
+# is: without it a mismatch surfaces as an opaque shape error inside the loss
+# function several minutes into training.
+NUM_CLASSES = ${numClasses}
+_found = len(train_ds.class_names)
+if _found != NUM_CLASSES:
+    raise ValueError(
+        f"This script was exported for {NUM_CLASSES} classes, but {DATA_DIR} "
+        f"contains {_found}: {train_ds.class_names}. "
+        f"Re-export with 'Number of Classes' set to {_found}, or point DATA_DIR "
+        f"at a dataset with {NUM_CLASSES} classes."
+    )
+print(f"{_found} classes: {train_ds.class_names}")
 
 AUTOTUNE = tf.data.AUTOTUNE
 train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
 val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
+`,
 
-# Re-compile using UI-selected hyperparams (overrides template defaults safely)
+            segmentation: `# ============================
+# DATA (EDIT THE TWO PATHS)
+# ============================
+# Segmentation needs one mask per image, not one label per image.
+# Masks must be single-channel, with pixel values 0..${numClasses - 1}.
+IMAGE_DIR = "path/to/images"
+MASK_DIR = "path/to/masks"
+IMG_SIZE = (${inputSize}, ${inputSize})
+BATCH_SIZE = ${batchSize}
+EPOCHS = ${epochs}
+
+import pathlib
+image_paths = sorted(str(p) for p in pathlib.Path(IMAGE_DIR).glob("*"))
+mask_paths = sorted(str(p) for p in pathlib.Path(MASK_DIR).glob("*"))
+assert len(image_paths) == len(mask_paths), "Each image needs exactly one mask."
+
+def _load(image_path, mask_path):
+    image = tf.image.resize(tf.io.decode_image(tf.io.read_file(image_path), channels=3, expand_animations=False), IMG_SIZE) / 255.0
+    mask = tf.image.resize(tf.io.decode_image(tf.io.read_file(mask_path), channels=1, expand_animations=False), IMG_SIZE, method="nearest")
+    return image, tf.one_hot(tf.cast(tf.squeeze(mask, -1), tf.int32), ${numClasses})
+
+ds = tf.data.Dataset.from_tensor_slices((image_paths, mask_paths)).map(_load, num_parallel_calls=tf.data.AUTOTUNE)
+n_val = max(1, int(0.2 * len(image_paths)))
+val_ds = ds.take(n_val).batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+train_ds = ds.skip(n_val).batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+`,
+
+            sequence: `# ============================
+# DATA (EDIT THIS)
+# ============================
+# Provide X of shape (n_samples, timesteps, features) and y of shape (n_samples,).
+# Example, windowing a univariate series:
+#   import numpy as np
+#   series = np.load("your_series.npy")
+#   X = np.stack([series[i:i + 100] for i in range(len(series) - 100)])[..., None]
+#   y = labels[100:]
+#
+# X = ...
+# y = ...
+
+try:
+    X, y
+except NameError as e:
+    raise NameError("Please define X and y before running. See the DATA section.") from e
+
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+X = np.asarray(X)
+SEQ_LEN, N_FEATURES = X.shape[1], X.shape[2]
+BATCH_SIZE = ${batchSize}
+EPOCHS = ${epochs}
+
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+`,
+
+            tabular: `# ============================
+# DATA (EDIT THIS)
+# ============================
+# Provide X of shape (n_samples, n_features) and y of shape (n_samples,).
+# Example:
+#   import pandas as pd
+#   df = pd.read_csv("your_data.csv")
+#   X = df.drop("label", axis=1).values
+#   y = df["label"].values
+#
+# X = ...
+# y = ...
+
+try:
+    X, y
+except NameError as e:
+    raise NameError("Please define X and y before running. See the DATA section.") from e
+
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+X = np.asarray(X, dtype="float32")
+N_FEATURES = X.shape[1]
+BATCH_SIZE = ${batchSize}
+EPOCHS = ${epochs}
+
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+`,
+
+            reconstruction: `# ============================
+# DATA (EDIT THIS)
+# ============================
+# An autoencoder is trained to reproduce its own input, so no labels are needed.
+# Provide X of shape (n_samples, n_features), scaled to [0, 1].
+# Example:
+#   (X, _), _ = tf.keras.datasets.mnist.load_data()
+#   X = X.reshape(len(X), -1) / 255.0
+#
+# X = ...
+
+try:
+    X
+except NameError as e:
+    raise NameError("Please define X before running. See the DATA section.") from e
+
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+X = np.asarray(X, dtype="float32")
+N_FEATURES = X.shape[1]
+LATENT_DIM = ${Math.max(2, Math.min(64, numClasses * 4))}
+BATCH_SIZE = ${batchSize}
+EPOCHS = ${epochs}
+
+X_train, X_val = train_test_split(X, test_size=0.2, random_state=42)
+`
+        };
+
+        // Transformer needs vocabulary and block sizes alongside the sequence.
+        const transformerConsts = (state.model === 'transformer' && state.currentMode !== 'custom')
+            ? `
+# Transformer hyperparameters
+VOCAB_SIZE = 10000   # set to your tokenizer's vocabulary size
+EMBED_DIM = 128
+N_HEADS = 4
+FF_DIM = 256
+N_BLOCKS = 2
+`
+            : '';
+
+        // Token sequences are integer ids of shape (samples, timesteps), so the
+        // generic sequence loader's feature axis does not apply.
+        const dataSection = (state.model === 'transformer' && state.currentMode !== 'custom')
+            ? dataSections.sequence.replace('SEQ_LEN, N_FEATURES = X.shape[1], X.shape[2]', 'SEQ_LEN = X.shape[1]')
+                                   .replace('# Provide X of shape (n_samples, timesteps, features) and y of shape (n_samples,).',
+                                            '# Provide X of integer token ids, shape (n_samples, timesteps), and y of shape (n_samples,).')
+            : dataSections[modality];
+
+        const fitCall = {
+            image: 'history = model.fit(train_ds, validation_data=val_ds, epochs=EPOCHS)',
+            segmentation: 'history = model.fit(train_ds, validation_data=val_ds, epochs=EPOCHS)',
+            sequence: 'history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=EPOCHS, batch_size=BATCH_SIZE)',
+            tabular: 'history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=EPOCHS, batch_size=BATCH_SIZE)',
+            text: 'history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=EPOCHS, batch_size=BATCH_SIZE)',
+            reconstruction: '# The target is the input itself.\nhistory = model.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=EPOCHS, batch_size=BATCH_SIZE)'
+        }[modality];
+        if (!fitCall) throw new Error(`No training pipeline defined for modality "${modality}". Please report this as a bug.`);
+
+        // A reconstruction model has no classes, so accuracy is meaningless.
+        const effectiveLoss = (modality === 'reconstruction') ? 'mse' : lossFunction;
+        const metrics = (modality === 'reconstruction') ? '["mae"]' : '["accuracy"]';
+
+        return header + seedBlockDL + `import tensorflow as tf
+` + envLockBlock + dataSection + transformerConsts + `
+` + modelCode + `
+# ============================
+# TRAINING
+# ============================
 model.compile(
     optimizer=${optExpr},
-    loss="${lossFunction}",
-    metrics=["accuracy"],
+    loss="${effectiveLoss}",
+    metrics=${metrics},
 )
 
-history = model.fit(train_ds, validation_data=val_ds, epochs=EPOCHS)
+${fitCall}
 
-model.save("deepforge_model.keras")
-print("Saved model to deepforge_model.keras")
+model.save("layernaut_model.keras")
+print("Saved model to layernaut_model.keras")
 `;
     },
 
@@ -708,14 +900,14 @@ print("Saved model to deepforge_model.keras")
             .replace(/[^a-zA-Z0-9]+/g, '_')
             .replace(/^_+|_+$/g, '');
 
-        const notebookName = `DeepForge_${safe(modelLabel)}_${safe(modeLabel.toLowerCase())}.ipynb`;
+        const notebookName = `Layernaut_${safe(modelLabel)}_${safe(modeLabel.toLowerCase())}.ipynb`;
 
         const cells = [
             {
                 "cell_type": "markdown",
                 "metadata": {},
                 "source": [
-                    `# 🚀 DeepForge Studio - ${modelLabel} (${modeLabel})\n`,
+                    `# 🚀 Layernaut Studio - ${modelLabel} (${modeLabel})\n`,
                     "\n",
                     "**Auto-generated Training Notebook**\n",
                     "\n",
@@ -744,7 +936,7 @@ print("Saved model to deepforge_model.keras")
                     "# Download the trained model (Google Colab only)\n",
                     "try:\n",
                     "    from google.colab import files\n",
-                    "    files.download('deepforge_model.keras')\n",
+                    "    files.download('layernaut_model.keras')\n",
                     "except Exception as e:\n",
                     "    print('Download is supported in Google Colab only:', e)\n"
                 ]

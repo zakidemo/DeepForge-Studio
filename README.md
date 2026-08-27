@@ -1,9 +1,22 @@
-# DeepForge Studio
+# Layernaut Studio
 
-**DeepForge Studio** is an open-source, client-side web application for rapid deep learning prototyping and reproducible code export.  
+**Layernaut Studio** is an open-source, client-side web application for rapid deep learning prototyping and reproducible code export.  
 It provides a visual workflow to select pre-built architectures or build custom layer stacks, configure training hyperparameters, and export a complete runnable training pipeline.
 
-https://github.com/user-attachments/assets/c6ebc1f2-2e02-4b17-864f-553a39d7e794
+## A note on naming
+
+This project is unrelated to, and not derived from, **DeepForge**
+(https://github.com/deepforge-dev/deepforge; Broll et al., *Scientific
+Programming*, 2020), an established open-source visual environment for deep
+learning. An earlier version of this software was distributed under a similar
+name; it was renamed to remove any risk of confusion or misattribution. The name **Layernaut** was checked against GitHub, PyPI,
+npm and Google Scholar before adoption.
+
+The two systems differ in architecture: DeepForge is a client-server platform
+built on WebGME, requiring Node.js, MongoDB and compute workers, and it executes
+training on remote infrastructure with built-in version control. Layernaut Studio
+is a static client-side bundle with no server, no database and no account, which
+exports runnable code rather than executing it.
 
 ## Exports
 - **Python script**: `.py`
@@ -14,7 +27,7 @@ https://github.com/user-attachments/assets/c6ebc1f2-2e02-4b17-864f-553a39d7e794
 
 ## Live Demo (GitHub Pages)
 If GitHub Pages is enabled for this repository, the demo is available at:  
-https://zakidemo.github.io/DeepForge-Studio/
+https://zakidemo.github.io/Layernaut-Studio/
 
 ## Quickstart (local)
 Because this project uses ES Modules, you must serve it over HTTP (not `file://`):
@@ -35,7 +48,7 @@ python -m http.server 8000
 - Classical ML templates (e.g., **KNN**) exportable as runnable scripts/notebooks
 
 ## Reproducibility
-DeepForge Studio can export a full configuration snapshot (`.json`) and re-import it later to restore the same experiment setup.
+Layernaut Studio can export a full configuration snapshot (`.json`) and re-import it later to restore the same experiment setup.
 
 Examples are provided in:
 - `examples/configs/`
@@ -59,4 +72,4 @@ This feature is optional (the tool works without it).
 MIT — see [LICENSE](LICENSE)
 
 ## Citation
-If you use DeepForge Studio in academic work, please use the citation metadata in [CITATION.cff](CITATION.cff).
+If you use Layernaut Studio in academic work, please use the citation metadata in [CITATION.cff](CITATION.cff).

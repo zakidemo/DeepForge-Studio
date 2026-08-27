@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to DeepForge Studio!
+Thanks for your interest in contributing to Layernaut Studio!
 
 ## Development setup
 1. Fork the repository and clone your fork.

@@ -1,0 +1,177 @@
+[
+  {
+    "case": "custom_AvgPool",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "custom_BatchNorm",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "custom_Conv2D",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "custom_Dense",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "custom_Dropout",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "custom_Flatten",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "custom_GRU",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "custom_GlobalAvgPool",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "custom_LSTM",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "custom_MaxPool",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "custom_cnn",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_alexnet_scratch",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_autoencoder_scratch",
+    "status": "FAIL",
+    "detail": "NameError: Please define X before running. See the DATA section."
+  },
+  {
+    "case": "dl_densenet_pretrained",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_efficientnet_pretrained",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_gru_scratch",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "dl_inceptionv3_pretrained",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_lstm_scratch",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "dl_mobilenet_pretrained",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_resnet50_pretrained",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_simple_cnn_scratch",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_transformer_scratch",
+    "status": "FAIL",
+    "detail": "NameError: Please define X and y before running. See the DATA section."
+  },
+  {
+    "case": "dl_unet_scratch",
+    "status": "FAIL",
+    "detail": "TypeError: in user code:"
+  },
+  {
+    "case": "dl_vgg16_pretrained",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "dl_vgg16_scratch",
+    "status": "FAIL",
+    "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'path/to/your/image_dataset'"
+  },
+  {
+    "case": "ml_decisiontree",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_kmeans",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_knn",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_linearregression",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_logisticregression",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_naivebayes",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_pca",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_randomforest",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_svm",
+    "status": "pass",
+    "detail": ""
+  },
+  {
+    "case": "ml_xgboost",
+    "status": "pass",
+    "detail": ""
+  }
+]
