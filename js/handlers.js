@@ -629,18 +629,26 @@ cancelModelModeModal() {
         Object.entries(config.params).forEach(([key, param]) => {
             const element = document.getElementById(`ml_${key}`);
             if (element) {
-                if (param.type === 'checkbox') {
+                  if (param.type === 'checkbox') {
                     state.mlConfig.params[key] = element.checked;
+                } else if (param.type === 'range') {
+                    state.mlConfig.params[key] = parseFloat(element.value);
                 } else {
                     state.mlConfig.params[key] = element.value;
                 }
             }
         });
         
+                // `?.checked || true` is always true, so unchecking the box had no
+        // effect on the generated code. Preserve a deliberate false, and a
+        // deliberate 0, instead of discarding them as falsy.
+        const scaleEl = document.getElementById('ml_scale_features');
+        const testEl = document.getElementById('ml_test_size');
+        const seedEl = document.getElementById('ml_random_state');
         state.mlConfig.preprocessing = {
-            scaleFeatures: document.getElementById('ml_scale_features')?.checked || true,
-            testSize: document.getElementById('ml_test_size')?.value || 0.2,
-            randomState: document.getElementById('ml_random_state')?.value || 42
+            scaleFeatures: scaleEl ? scaleEl.checked : true,
+            testSize: (testEl && testEl.value !== '') ? parseFloat(testEl.value) : 0.2,
+            randomState: (seedEl && seedEl.value !== '') ? parseInt(seedEl.value, 10) : 42
         };
         
         codeGenerator.generateCode();
@@ -1867,11 +1875,14 @@ const setupEventListeners = () => {
     });
 
     // Range inputs display update
-    document.querySelectorAll('input[type="range"]').forEach(range => {
-        range.addEventListener('input', (e) => {
+        // Delegated from the document rather than bound to the sliders present at
+    // load: the configuration modals build their sliders when they open, so
+    // directly bound listeners never reached them.
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.type === 'range') {
             const display = document.getElementById(`${e.target.id}_value`);
             if (display) display.textContent = e.target.value;
-        });
+        }
     });
 };
 
